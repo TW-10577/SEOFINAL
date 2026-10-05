@@ -1,0 +1,20 @@
+# Agent worktree (copy of home dir incl. SSH keys) — never commit
+.kilo/
+
+# Dependencies / build output
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Local SQLite databases (rebuild from schema.sql)
+*.db
+*.db-wal
+*.db-shm
+
+# Env / secrets
+.env
+.env.*
+
+# Editor / OS
+.vscode/
+.DS_Store

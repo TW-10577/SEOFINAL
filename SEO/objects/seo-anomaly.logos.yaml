@@ -1,0 +1,319 @@
+# Loaded at startup by SEO/seo-api. apiName values must match the fields the API stores (checked on startup).
+apiVersion: logos.ontology/v0.0.1
+kind: ObjectType
+metadata:
+  id: logos.seo.object.seo-anomaly
+  apiName: SEOAnomaly
+  displayName:
+    en: SEO Anomaly
+    ja: SEO異常
+  description:
+    en: A week-over-week metric change that crossed its threshold.
+    ja: 閾値を超えた前週比の指標変化。
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-platform
+    ownerType: team
+  visibility: package
+  annotations:
+    logos.ext/source-namespace: logos.seo
+    logos.ext/consumed-by: SEO/seo-api (src/ontology.ts)
+    logos.ext/source-object-id: SEO-O2
+spec:
+  semanticKind: business_concept
+  identity:
+    strategy: system_generated
+    primaryPropertyRef: '#property/anomaly-id'
+  properties:
+  - memberId: anomaly-id
+    apiName: anomalyId
+    displayName:
+      en: Anomaly ID
+      ja: 異常ID
+    description:
+      en: Unique identifier of the anomaly.
+      ja: 異常の一意識別子。
+    valueTypeRef: logos.retail-ec-common.value.subject-id
+    required: true
+    nullable: false
+    valueMode: stored
+    sensitivity: internal
+    immutable: true
+    sourceAuthority:
+      authorityKind: internal
+      riskLevel: low
+  - memberId: dataset-id
+    apiName: datasetId
+    displayName:
+      en: Dataset ID
+      ja: データセットID
+    description:
+      en: Uploaded dataset the anomaly was detected in.
+      ja: 異常を検出したアップロードデータセット。
+    valueTypeRef: logos.shared-core.value.short-text
+    required: true
+    nullable: false
+    valueMode: stored
+    sensitivity: internal
+    immutable: true
+    sourceAuthority:
+      authorityKind: internal
+      riskLevel: low
+  - memberId: source
+    apiName: source
+    displayName:
+      en: Data Source
+      ja: データソース
+    description:
+      en: Kind of export the dataset came from.
+      ja: データセットの出力元の種類。
+    valueTypeRef: logos.seo.value.data-source
+    required: true
+    nullable: false
+    valueMode: stored
+    sensitivity: internal
+    sourceAuthority:
+      authorityKind: internal
+      riskLevel: low
+  - memberId: metric-key
+    apiName: metricKey
+    displayName:
+      en: Metric Key
+      ja: 指標キー
+    description:
+      en: Stable key of the metric (clicks, ctr, sessions, cvr ...).
+      ja: 指標の固定キー（clicks、ctr、sessions、cvr など）。
+    valueTypeRef: logos.shared-core.value.short-text
+    required: true
+    nullable: false
+    valueMode: stored
+    sensitivity: internal
+    sourceAuthority:
+      authorityKind: internal
+      riskLevel: low
+  - memberId: metric-name
+    apiName: metricName
+    displayName:
+      en: Metric Name
+      ja: 指標名
+    description:
+      en: Display name of the metric.
+      ja: 指標の表示名。
+    valueTypeRef: logos.shared-core.value.short-text
+    required: true
+    nullable: false
+    valueMode: stored
+    sensitivity: internal
+    sourceAuthority:
+      authorityKind: internal
+      riskLevel: low
+  - memberId: scope
+    apiName: scope
+    displayName:
+      en: Scope
+      ja: 対象範囲
+    description:
+      en: 'What the metric was measured over: the whole site in GSC, or a GA4 segment.'
+      ja: 指標の計測範囲（GSCのサイト全体、またはGA4のセグメント）。
+    valueTypeRef: logos.shared-core.value.short-text
+    required: true
+    nullable: false
+    valueMode: stored
+    sensitivity: internal
+    sourceAuthority:
+      authorityKind: internal
+      riskLevel: low
+  - memberId: kind
+    apiName: kind
+    displayName:
+      en: Change Kind
+      ja: 変化の種類
+    description:
+      en: 'How the change is measured: percent, percentage points or rank.'
+      ja: 変化の測り方（%、ポイント、順位）。
+    valueTypeRef: logos.seo.value.change-kind
+    required: true
+    nullable: false
+    valueMode: stored
+    sensitivity: internal
+    sourceAuthority:
+      authorityKind: internal
+      riskLevel: low
+  - memberId: previous-value
+    apiName: previousValue
+    displayName:
+      en: Previous Value
+      ja: 前週値
+    description:
+      en: Metric value for the previous week.
+      ja: 前週の指標値。
+    valueTypeRef: logos.shared-core.value.number
+    required: true
+    nullable: false
+    valueMode: stored
+    sensitivity: internal
+    sourceAuthority:
+      authorityKind: internal
+      riskLevel: low
+  - memberId: current-value
+    apiName: currentValue
+    displayName:
+      en: Current Value
+      ja: 今週値
+    description:
+      en: Metric value for the latest week.
+      ja: 最新週の指標値。
+    valueTypeRef: logos.shared-core.value.number
+    required: true
+    nullable: false
+    valueMode: stored
+    sensitivity: internal
+    sourceAuthority:
+      authorityKind: internal
+      riskLevel: low
+  - memberId: absolute-change
+    apiName: absoluteChange
+    displayName:
+      en: Absolute Change
+      ja: 変化量
+    description:
+      en: Current value minus previous value.
+      ja: 今週値 − 前週値。
+    valueTypeRef: logos.shared-core.value.number
+    required: true
+    nullable: false
+    valueMode: stored
+    sensitivity: internal
+    sourceAuthority:
+      authorityKind: internal
+      riskLevel: low
+  - memberId: change-percentage
+    apiName: changePercentage
+    displayName:
+      en: Change Percentage
+      ja: 変化率
+    description:
+      en: Change relative to the previous value; null when the previous value is 0.
+      ja: 前週値に対する変化率。前週値が0の場合はnull。
+    valueTypeRef: logos.seo.value.signed-percentage
+    required: true
+    nullable: true
+    valueMode: stored
+    sensitivity: internal
+    sourceAuthority:
+      authorityKind: internal
+      riskLevel: low
+  - memberId: threshold
+    apiName: threshold
+    displayName:
+      en: Threshold
+      ja: 閾値
+    description:
+      en: Threshold that the change crossed.
+      ja: 変化が超えた閾値。
+    valueTypeRef: logos.seo.value.threshold
+    required: true
+    nullable: false
+    valueMode: stored
+    sensitivity: internal
+    sourceAuthority:
+      authorityKind: internal
+      riskLevel: low
+  - memberId: previous-period
+    apiName: previousPeriod
+    displayName:
+      en: Previous Period
+      ja: 前週期間
+    description:
+      en: Dates of the previous week.
+      ja: 前週の期間。
+    valueTypeRef: logos.seo.value.period
+    required: true
+    nullable: false
+    valueMode: stored
+    sensitivity: internal
+    sourceAuthority:
+      authorityKind: internal
+      riskLevel: low
+  - memberId: current-period
+    apiName: currentPeriod
+    displayName:
+      en: Current Period
+      ja: 今週期間
+    description:
+      en: Dates of the latest week.
+      ja: 最新週の期間。
+    valueTypeRef: logos.seo.value.period
+    required: true
+    nullable: false
+    valueMode: stored
+    sensitivity: internal
+    sourceAuthority:
+      authorityKind: internal
+      riskLevel: low
+  - memberId: detection-date
+    apiName: detectionDate
+    displayName:
+      en: Detection Date
+      ja: 検出日
+    description:
+      en: Date the anomaly was detected.
+      ja: 異常を検出した日。
+    valueTypeRef: logos.shared-core.value.date
+    required: true
+    nullable: false
+    valueMode: stored
+    sensitivity: internal
+    sourceAuthority:
+      authorityKind: internal
+      riskLevel: low
+  - memberId: status
+    apiName: status
+    displayName:
+      en: Status
+      ja: ステータス
+    description:
+      en: Review status set by the SEO team.
+      ja: SEO担当が設定する確認ステータス。
+    valueTypeRef: logos.seo.value.anomaly-status
+    required: true
+    nullable: false
+    valueMode: stored
+    sensitivity: internal
+    sourceAuthority:
+      authorityKind: internal
+      riskLevel: low
+  - memberId: possible-cause
+    apiName: possibleCause
+    displayName:
+      en: Possible Cause
+      ja: 想定原因
+    description:
+      en: Cause suggested by the system; the SEO team confirms or rejects it.
+      ja: システムが提示する想定原因。SEO担当が確認・判断する。
+    valueTypeRef: logos.shared-core.value.long-text
+    required: true
+    nullable: false
+    valueMode: stored
+    sensitivity: internal
+    sourceAuthority:
+      authorityKind: internal
+      riskLevel: low
+  security:
+    classification: internal
+    policyCombining: deny_overrides
+    readPolicyRefs:
+    - logos.shared-core.policy.authenticated-internal-reader
+    queryPolicyRefs:
+    - logos.shared-core.policy.authenticated-internal-reader
+    agentRestrictions:
+      defaultAgentMode: propose_only
+      externalWriteAllowed: false
+  audit:
+    enabled: true
+    eventCategories:
+    - property_change
+    recordReleaseRefs: true
+    integrityMode: hash_chain
+    retentionPolicyRef: logos.shared-core.policy.audit-retention-7y
+  titlePropertyRef: '#property/metric-name'

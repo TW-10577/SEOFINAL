@@ -1,0 +1,85 @@
+# Loaded at startup by SEO/seo-api; every valueTypeRef must resolve.
+apiVersion: logos.ontology/v0.0.1
+kind: Function
+metadata:
+  id: logos.seo.function.detect-significant-change
+  apiName: DetectSignificantChange
+  displayName:
+    en: Detect Significant Change
+    ja: 重要な変化を検出
+  description:
+    en: Compares the latest week with the previous week and decides whether the change crosses the threshold from config/thresholds.yaml.
+    ja: 最新週と前週を比較し、config/thresholds.yamlの閾値を超えたかを判定する。
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-platform
+    ownerType: team
+  visibility: package
+  annotations:
+    logos.ext/source-namespace: logos.seo
+    logos.ext/consumed-by: SEO/seo-api (src/ontology.ts)
+    logos.ext/implementation: seo-api/src/analysis.ts compareLatestWeeks
+    logos.ext/source-function-id: SEO-F2
+spec:
+  input:
+    parameters:
+    - parameterId: metric-key
+      apiName: metricKey
+      displayName:
+        en: Metric Key
+        ja: 指標キー
+      valueTypeRef: logos.shared-core.value.short-text
+      required: true
+    - parameterId: kind
+      apiName: kind
+      displayName:
+        en: Change Kind
+        ja: 変化の種類
+      valueTypeRef: logos.seo.value.change-kind
+      required: true
+    - parameterId: previous-value
+      apiName: previousValue
+      displayName:
+        en: Previous Week Value
+        ja: 前週値
+      valueTypeRef: logos.shared-core.value.number
+      required: true
+    - parameterId: current-value
+      apiName: currentValue
+      displayName:
+        en: Latest Week Value
+        ja: 最新週値
+      valueTypeRef: logos.shared-core.value.number
+      required: true
+    - parameterId: threshold
+      apiName: threshold
+      displayName:
+        en: Threshold
+        ja: 閾値
+      valueTypeRef: logos.seo.value.threshold
+      required: true
+  output:
+    parameters:
+    - parameterId: absolute-change
+      apiName: absoluteChange
+      displayName:
+        en: Absolute Change
+        ja: 変化量
+      valueTypeRef: logos.shared-core.value.number
+      required: true
+    - parameterId: change-percentage
+      apiName: changePercentage
+      displayName:
+        en: Change Percentage
+        ja: 変化率
+      valueTypeRef: logos.seo.value.signed-percentage
+      required: false
+    - parameterId: is-significant
+      apiName: isSignificant
+      displayName:
+        en: Is Significant
+        ja: 重要な変化か
+      valueTypeRef: logos.shared-core.value.boolean
+      required: true
+  functionMode: deterministic
+  requiresApproval: false

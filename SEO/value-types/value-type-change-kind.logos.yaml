@@ -1,0 +1,35 @@
+# Loaded at startup by SEO/seo-api; values must match the API code.
+apiVersion: logos.ontology/v0.0.1
+kind: ValueType
+metadata:
+  id: logos.seo.value.change-kind
+  apiName: ChangeKind
+  displayName:
+    en: Change Kind
+    ja: 変化の種類
+  description:
+    en: How a week-over-week change is measured and compared with its threshold.
+    ja: 前週比の変化の測り方と閾値との比較方法。
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-platform
+    ownerType: team
+  visibility: package
+  annotations:
+    logos.ext/source-namespace: logos.seo
+    logos.ext/consumed-by: SEO/seo-api (src/ontology.ts)
+spec:
+  valueKind: enumerated_text
+  enumeratedValues:
+  - value: relative
+    displayName:
+      en: Percent change
+      ja: 変化率（%）
+  - value: points
+    displayName:
+      en: Percentage points
+      ja: ポイント差
+  - value: rank
+    displayName:
+      en: Rank change (positive = worse)
+      ja: 順位差（正 = 悪化）

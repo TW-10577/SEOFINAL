@@ -1,0 +1,48 @@
+apiVersion: logos.ontology/v0.0.1
+kind: ValueType
+metadata:
+  id: logos.seo.value.priority-level
+  apiName: PriorityLevel
+  displayName:
+    en: Priority Level
+    ja: 優先度レベル
+  description:
+    en: Priority level for actions and countermeasures.
+    ja: アクションと対策の優先度レベル。
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-platform
+    ownerType: team
+  visibility: package
+  annotations:
+    logos.ext/source-ontology-version: v0.3
+    logos.ext/source-namespace: logos.seo
+
+spec:
+  valueKind: enumerated_text
+  textConstraint:
+    caseSensitive: true
+    minLength: 1
+    maxLength: 10
+  enumeratedValues:
+  - value: High
+    displayName:
+      en: High
+      ja: 高
+    description:
+      en: High priority - immediate action required.
+      ja: 高優先度 - 即座のアクションが必要。
+  - value: Medium
+    displayName:
+      en: Medium
+      ja: 中
+    description:
+      en: Medium priority - action needed soon.
+      ja: 中優先度 - 近いうちにアクションが必要。
+  - value: Low
+    displayName:
+      en: Low
+      ja: 低
+    description:
+      en: Low priority - action can be deferred.
+      ja: 低優先度 - アクションは延期可能。

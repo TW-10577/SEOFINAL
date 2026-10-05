@@ -1,0 +1,80 @@
+# Loaded at startup by SEO/seo-api; every valueTypeRef must resolve.
+apiVersion: logos.ontology/v0.0.1
+kind: Function
+metadata:
+  id: logos.seo.function.suggest-cause
+  apiName: SuggestCause
+  displayName:
+    en: Suggest Cause
+    ja: 原因を提案
+  description:
+    en: Rule-based suggestion of a possible cause and countermeasure for an anomaly (SEO.txt rules ① ②, plus unconfirmed GSC
+      heuristics). The SEO team confirms or rejects it.
+    ja: 異常に対する想定原因と対策を判断ルール（SEO.txt ①②、未確認のGSC仮ルール）で提案する。SEO担当が確認・判断する。
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-platform
+    ownerType: team
+  visibility: package
+  annotations:
+    logos.ext/source-namespace: logos.seo
+    logos.ext/consumed-by: SEO/seo-api (src/ontology.ts)
+    logos.ext/implementation: seo-api/src/rules.ts suggest
+    logos.ext/source-function-id: SEO-F1
+    logos.ext/requires-human-review: 'true'
+spec:
+  input:
+    parameters:
+    - parameterId: anomaly
+      apiName: anomaly
+      displayName:
+        en: Anomaly
+        ja: 異常
+      valueTypeRef: logos.seo.object.seo-anomaly
+      required: true
+  output:
+    parameters:
+    - parameterId: possible-cause
+      apiName: possibleCause
+      displayName:
+        en: Possible Cause
+        ja: 想定原因
+      valueTypeRef: logos.shared-core.value.long-text
+      required: true
+    - parameterId: description
+      apiName: description
+      displayName:
+        en: Suggested Action
+        ja: 推奨アクション
+      valueTypeRef: logos.shared-core.value.long-text
+      required: true
+    - parameterId: owner-team
+      apiName: ownerTeam
+      displayName:
+        en: Owner Team
+        ja: 担当チーム
+      valueTypeRef: logos.shared-core.value.short-text
+      required: true
+    - parameterId: priority
+      apiName: priority
+      displayName:
+        en: Priority
+        ja: 優先度
+      valueTypeRef: logos.seo.value.priority-level
+      required: true
+    - parameterId: rule
+      apiName: rule
+      displayName:
+        en: Rule
+        ja: 判断ルール
+      valueTypeRef: logos.shared-core.value.short-text
+      required: true
+    - parameterId: rule-confirmed
+      apiName: ruleConfirmed
+      displayName:
+        en: Rule Confirmed
+        ja: ルール確認済み
+      valueTypeRef: logos.shared-core.value.boolean
+      required: true
+  functionMode: deterministic
+  requiresApproval: true

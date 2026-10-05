@@ -1,0 +1,24 @@
+# Loaded at startup by SEO/seo-api.
+apiVersion: logos.ontology/v0.0.1
+kind: ValueType
+metadata:
+  id: logos.seo.value.signed-percentage
+  apiName: SignedPercentage
+  displayName:
+    en: Signed Percentage
+    ja: 符号付きパーセンテージ
+  description:
+    en: Percent change; negative for decreases. Unbounded above (a metric can more than double).
+    ja: 変化率（減少は負）。上限なし（指標が2倍以上になる場合がある）。
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-platform
+    ownerType: team
+  visibility: package
+  annotations:
+    logos.ext/source-namespace: logos.seo
+    logos.ext/consumed-by: SEO/seo-api (src/ontology.ts)
+spec:
+  valueKind: numeric_value
+  numericConstraint:
+    min: -100

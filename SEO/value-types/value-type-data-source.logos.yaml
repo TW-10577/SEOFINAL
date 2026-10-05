@@ -1,0 +1,47 @@
+# Loaded at startup by SEO/seo-api; values must match the API code.
+apiVersion: logos.ontology/v0.0.1
+kind: ValueType
+metadata:
+  id: logos.seo.value.data-source
+  apiName: DataSource
+  displayName:
+    en: Data Source
+    ja: データソース
+  description:
+    en: Kind of GSC / GA4 export recognised by the upload.
+    ja: アップロードで認識するGSC / GA4出力の種類。
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-platform
+    ownerType: team
+  visibility: package
+  annotations:
+    logos.ext/source-namespace: logos.seo
+    logos.ext/consumed-by: SEO/seo-api (src/ontology.ts)
+spec:
+  valueKind: enumerated_text
+  enumeratedValues:
+  - value: gsc-daily
+    displayName:
+      en: GSC daily chart
+      ja: GSC 日別
+  - value: ga4-daily
+    displayName:
+      en: GA4 daily
+      ja: GA4 日別
+  - value: ga4-snapshot
+    displayName:
+      en: GA4 totals
+      ja: GA4 合計
+  - value: gsc-pages
+    displayName:
+      en: GSC pages
+      ja: GSC ページ
+  - value: gsc-queries
+    displayName:
+      en: GSC queries
+      ja: GSC クエリ
+  - value: gsc-other
+    displayName:
+      en: GSC breakdown
+      ja: GSC 内訳

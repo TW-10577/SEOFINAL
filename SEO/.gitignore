@@ -1,0 +1,8 @@
+node_modules/
+dist/
+*.tsbuildinfo
+# Local SQLite database (created on first start from api/src/schema.sql)
+database/*.db
+database/*.db-journal
+.vite/
+.ontology-build/

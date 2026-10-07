@@ -1,0 +1,29 @@
+apiVersion: logos.ontology/v0.0.1
+kind: ValueType
+metadata:
+  id: logos.seo.value.ctr
+  apiName: CTR
+  displayName:
+    en: CTR
+    ja: CTR
+  description:
+    en: Click-through rate, clicks ÷ impressions × 100. Derived; not stored from the export when clicks and impressions
+      exist.
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+spec:
+  valueKind: semantic
+  baseTypeRef: logos.seo.value.seo-decimal
+  unit: percent
+  constraints:
+    - constraintKind: range
+      parameters:
+        minimum: 0
+        maximum: 100
+      severity: error
+      code: CTR_RANGE
+      message:
+        en: CTR must be between 0 and 100 percent.

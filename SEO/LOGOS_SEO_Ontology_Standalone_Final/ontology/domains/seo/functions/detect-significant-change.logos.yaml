@@ -1,0 +1,70 @@
+apiVersion: logos.ontology/v0.0.1
+kind: Function
+metadata:
+  id: logos.seo.function.detect-significant-change
+  apiName: DetectSignificantChangeFunction
+  displayName:
+    en: Detect Significant Change
+    ja: 有意な変化の検知
+  description:
+    en: "Applies a judgment condition to the current and previous SEO Data of an analysis unit: aggregates the week,
+      computes the change and calls IsChangeSignificant. Incomplete weeks give NOT_EVALUABLE."
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+spec:
+  functionKind: deterministic
+  inputs:
+    - parameterId: previous-value
+      apiName: previousValue
+      description:
+        en: Aggregated previous-week value; NULL when any day is missing.
+      typeRef: logos.seo.value.seo-decimal
+      required: true
+      nullable: true
+    - parameterId: current-value
+      apiName: currentValue
+      description:
+        en: Aggregated current-week value; NULL when any day is missing.
+      typeRef: logos.seo.value.seo-decimal
+      required: true
+      nullable: true
+    - parameterId: threshold-value
+      apiName: thresholdValue
+      description:
+        en: Condition threshold.
+      typeRef: logos.seo.value.threshold-value
+      required: true
+      nullable: true
+    - parameterId: unit
+      apiName: unit
+      description:
+        en: Threshold unit.
+      typeRef: logos.seo.value.threshold-unit
+      required: true
+      nullable: false
+    - parameterId: direction
+      apiName: direction
+      description:
+        en: Direction.
+      typeRef: logos.seo.value.change-direction
+      required: true
+      nullable: false
+  output:
+    parameterId: result
+    apiName: result
+    description:
+      en: SIGNIFICANT, NOT_SIGNIFICANT or NOT_EVALUABLE.
+    typeRef: logos.seo.value.significance-result
+    required: true
+    nullable: false
+  implementation:
+    implementationKind: service
+    implementationRef: service:seo/detect-significant-change
+    implementationVersion: 0.0.1
+    cachePolicy: request
+  failureMode: fail_closed
+  security:
+    classification: internal

@@ -1,0 +1,234 @@
+apiVersion: logos.ontology/v0.0.1
+kind: ActionType
+metadata:
+  id: logos.seo.action.register-seo-anomaly
+  apiName: RegisterSEOAnomaly
+  displayName:
+    en: Register SEO Anomaly
+    ja: SEO 異常の登録
+  description:
+    en: A5. Creates an SEO Anomaly for a SIGNIFICANT result, in DETECTED, linked to its subject, its evidence SEO Data and
+      the judgment condition.
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+  annotations:
+    logos.ext/design-source: LOGOS_SEO_Ontology_Design.md_.md §5 A5
+    logos.ext/performed-by: System
+spec:
+  target:
+    targetTypeRef: logos.seo.object.seo-anomaly
+    targetMode: create_instance
+  inputs:
+    - inputId: subject-type
+      apiName: subjectType
+      description:
+        en: Site, traffic source, query or page.
+      typeRef: logos.seo.value.analysis-unit-type
+      required: true
+    - inputId: metric
+      apiName: metric
+      description:
+        en: Metric that changed.
+      typeRef: logos.seo.value.seo-string
+      required: true
+    - inputId: previous-value
+      apiName: previousValue
+      description:
+        en: Previous-week value.
+      typeRef: logos.seo.value.seo-decimal
+      required: true
+    - inputId: current-value
+      apiName: currentValue
+      description:
+        en: Current-week value.
+      typeRef: logos.seo.value.seo-decimal
+      required: true
+    - inputId: change
+      apiName: change
+      description:
+        en: Current − previous.
+      typeRef: logos.seo.value.absolute-change
+      required: true
+    - inputId: change-rate
+      apiName: changeRate
+      description:
+        en: Change rate; NULL when undefined.
+      typeRef: logos.seo.value.change-rate
+      nullable: true
+    - inputId: detection-date
+      apiName: detectionDate
+      description:
+        en: Date of the measurement run.
+      typeRef: logos.seo.value.detection-date
+      required: true
+    - inputId: evidence-data
+      apiName: evidenceData
+      description:
+        en: SEO Data the change was computed from.
+      typeRef: logos.seo.object.seo-data
+      required: true
+    - inputId: judgment-condition
+      apiName: judgmentCondition
+      description:
+        en: The condition that returned SIGNIFICANT.
+      typeRef: logos.seo.object.judgment-condition
+      required: true
+    - inputId: subject-site
+      apiName: subjectSite
+      description:
+        en: Site the change is about. Exactly one subject input is supplied, matching the subject type; the other subject
+          relations are not created.
+      typeRef: logos.seo.object.site
+      nullable: true
+    - inputId: subject-traffic-source
+      apiName: subjectTrafficSource
+      description:
+        en: Traffic source the change is about. Exactly one subject input is supplied, matching the subject type; the other
+          subject relations are not created.
+      typeRef: logos.seo.object.traffic-source
+      nullable: true
+    - inputId: subject-search-query
+      apiName: subjectSearchQuery
+      description:
+        en: Search query the change is about. Exactly one subject input is supplied, matching the subject type; the other
+          subject relations are not created.
+      typeRef: logos.seo.object.search-query
+      nullable: true
+    - inputId: subject-page
+      apiName: subjectPage
+      description:
+        en: Page the change is about. Exactly one subject input is supplied, matching the subject type; the other subject
+          relations are not created.
+      typeRef: logos.seo.object.page
+      nullable: true
+  riskLevel: medium
+  authorizationPolicyBindings:
+    - bindingId: primary-authorization
+      policyRef: logos.seo.policy.seo-system-execution
+  approval:
+    mode: none
+    reapprovalOnChange:
+      - input
+    recordComments: true
+  effects:
+    - effectId: create
+      effectKind: create_object
+      targetExpression: logos.seo.object.seo-anomaly
+      atomicGroup: register
+    - effectId: set-subject-type
+      effectKind: update_property
+      propertyRef: "#property/subject-type"
+      valueExpression: input.subjectType
+      atomicGroup: register
+    - effectId: set-metric
+      effectKind: update_property
+      propertyRef: "#property/metric"
+      valueExpression: input.metric
+      atomicGroup: register
+    - effectId: set-previous
+      effectKind: update_property
+      propertyRef: "#property/previous-value"
+      valueExpression: input.previousValue
+      atomicGroup: register
+    - effectId: set-current
+      effectKind: update_property
+      propertyRef: "#property/current-value"
+      valueExpression: input.currentValue
+      atomicGroup: register
+    - effectId: set-change
+      effectKind: update_property
+      propertyRef: "#property/change"
+      valueExpression: input.change
+      atomicGroup: register
+    - effectId: set-rate
+      effectKind: update_property
+      propertyRef: "#property/change-rate"
+      valueExpression: input.changeRate
+      atomicGroup: register
+    - effectId: set-detection-date
+      effectKind: update_property
+      propertyRef: "#property/detection-date"
+      valueExpression: input.detectionDate
+      atomicGroup: register
+    - effectId: link-evidence
+      effectKind: add_relation
+      targetExpression: logos.seo.relation.anomaly-based-on
+      atomicGroup: register
+    - effectId: link-condition
+      effectKind: add_relation
+      targetExpression: logos.seo.relation.anomaly-evaluated-by
+      atomicGroup: register
+    - effectId: link-subject-site
+      effectKind: add_relation
+      targetExpression: logos.seo.relation.anomaly-detected-on-site
+      atomicGroup: register
+    - effectId: link-subject-traffic-source
+      effectKind: add_relation
+      targetExpression: logos.seo.relation.anomaly-detected-on-traffic-source
+      atomicGroup: register
+    - effectId: link-subject-search-query
+      effectKind: add_relation
+      targetExpression: logos.seo.relation.anomaly-detected-on-search-query
+      atomicGroup: register
+    - effectId: link-subject-page
+      effectKind: add_relation
+      targetExpression: logos.seo.relation.anomaly-detected-on-page
+      atomicGroup: register
+  evidenceRequirements:
+    - evidenceTypeRef: logos.seo.evidence.source-record
+      onMissing: deny
+  idempotency:
+    keyExpression: concat(action.id, ':', target.id, ':', request.id)
+    scope: target_action
+    retention: P30D
+    onDuplicate: return_original_receipt
+    inputMismatchBehavior: reject
+    inputHashRequired: true
+  concurrency:
+    strategy: optimistic_version
+    tokenExpression: target.version
+    onConflict: reject
+    maxRetries: 0
+  execution:
+    executionMode: internal_atomic
+  failure:
+    failureClasses:
+      - validation
+      - authorization
+      - concurrency
+      - unknown
+    retryableClasses: []
+    compensationMode: manual_recovery
+    unknownResultPolicy: freeze_and_escalate
+  receipt:
+    required: true
+  observation:
+    required: true
+    strategy: read_back_after_commit
+    deadline: PT30S
+  reconciliation:
+    strategy: typed_comparison
+    successCriteria:
+      - target.status == 'DETECTED'
+    onUnknown: freeze_and_escalate
+  security:
+    classification: internal
+    agentRestrictions:
+      defaultAgentMode: propose_only
+      externalWriteAllowed: false
+  audit:
+    enabled: true
+    eventCategories:
+      - action
+      - property_change
+      - relation_change
+    recordBeforeAfter: true
+    recordInputHash: true
+    recordEvidenceRefs: true
+    recordReleaseRefs: true
+    recordActionChain: true
+    integrityMode: hash_chain
+    retentionPolicyRef: logos.seo.policy.audit-retention

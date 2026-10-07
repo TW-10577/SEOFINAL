@@ -1,0 +1,32 @@
+apiVersion: logos.ontology/v0.0.1
+kind: Policy
+metadata:
+  id: logos.seo.policy.can-review-seo-outcome
+  apiName: CanReviewSEOOutcome
+  displayName:
+    en: SEO Review Authorization
+  description:
+    en: "Who may change the state of an anomaly, a cause hypothesis or a countermeasure: an internal member of the SEO team.
+      The system identity is excluded — the system suggests, the SEO team decides."
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+spec:
+  policyKind: authorization
+  decisionType: ALLOW_DENY
+  evaluation:
+    evaluationKind: expression
+    implementationRef: expr:seo/can-review-seo-outcome
+    implementationVersion: 0.0.1
+    expression: actor.participantType == 'INTERNAL' and 'seo-team' in actor.roles and not ('seo-system' in actor.roles)
+    failureDecision: DENY
+    timeout: PT2S
+  audit:
+    enabled: true
+    eventCategories:
+      - policy
+    recordReleaseRefs: true
+    integrityMode: hash_chain
+    retentionPolicyRef: logos.seo.policy.audit-retention

@@ -1,0 +1,18 @@
+apiVersion: logos.ontology/v0.0.1
+kind: ValueType
+metadata:
+  id: logos.seo.value.search-query
+  apiName: SearchQueryText
+  displayName:
+    en: Search Query Text
+    ja: 検索クエリ
+  description:
+    en: A search keyword as exported by Search Console.
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+spec:
+  valueKind: semantic
+  baseTypeRef: logos.seo.value.seo-string

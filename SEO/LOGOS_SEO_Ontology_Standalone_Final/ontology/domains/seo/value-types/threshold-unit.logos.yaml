@@ -1,0 +1,42 @@
+apiVersion: logos.ontology/v0.0.1
+kind: ValueType
+metadata:
+  id: logos.seo.value.threshold-unit
+  apiName: ThresholdUnit
+  displayName:
+    en: Threshold Unit
+    ja: 閾値の単位
+  description:
+    en: How a threshold is compared. UNRESOLVED means the client has not confirmed it, so the condition cannot be evaluated.
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+spec:
+  valueKind: vocabulary
+  vocabularyValues:
+    - code: PERCENT
+      apiName: Percent
+      displayName:
+        en: Percent (relative change)
+        ja: "%（相対変化）"
+      description:
+        en: "|change rate| ≥ threshold."
+      ordinal: 10
+    - code: PERCENTAGE_POINTS
+      apiName: PercentagePoints
+      displayName:
+        en: Percentage points
+        ja: パーセントポイント
+      description:
+        en: "|absolute change| ≥ threshold, for a metric that is itself a percentage."
+      ordinal: 20
+    - code: UNRESOLVED
+      apiName: Unresolved
+      displayName:
+        en: Unresolved
+        ja: 未解決
+      description:
+        en: Not confirmed by the client; the condition returns NOT_EVALUABLE.
+      ordinal: 30

@@ -1,0 +1,27 @@
+apiVersion: logos.ontology/v0.0.1
+kind: ValueType
+metadata:
+  id: logos.seo.value.seo-string
+  apiName: SEOString
+  displayName:
+    en: Short Text
+    ja: 短いテキスト
+  description:
+    en: A short single-line text such as a name or label. Use NULL for absence, never an empty string.
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+spec:
+  valueKind: primitive
+  primitive: string
+  constraints:
+    - constraintKind: length
+      parameters:
+        minLength: 1
+        maxLength: 500
+      severity: error
+      code: SEO_STRING_LENGTH
+      message:
+        en: Short text must be 1–500 characters.

@@ -1,0 +1,51 @@
+apiVersion: logos.ontology/v0.0.1
+kind: ValueType
+metadata:
+  id: logos.seo.value.analysis-unit-type
+  apiName: AnalysisUnitType
+  displayName:
+    en: Analysis Unit Type
+    ja: 分析単位
+  description:
+    en: What an anomaly was detected on. Client rules ① and ② judge the site total and traffic sources; Search Console works
+      at query and page level.
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+spec:
+  valueKind: vocabulary
+  vocabularyValues:
+    - code: SITE
+      apiName: Site
+      displayName:
+        en: Site
+        ja: サイト
+      description:
+        en: The whole site (GA4 total segment).
+      ordinal: 10
+    - code: TRAFFIC_SOURCE
+      apiName: TrafficSource
+      displayName:
+        en: Traffic source
+        ja: 流入元
+      description:
+        en: One GA4 traffic source / segment.
+      ordinal: 20
+    - code: SEARCH_QUERY
+      apiName: SearchQuery
+      displayName:
+        en: Search query
+        ja: 検索クエリ
+      description:
+        en: One Search Console query.
+      ordinal: 30
+    - code: PAGE
+      apiName: Page
+      displayName:
+        en: Page
+        ja: ページ
+      description:
+        en: One page URL.
+      ordinal: 40

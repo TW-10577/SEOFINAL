@@ -1,0 +1,51 @@
+apiVersion: logos.ontology/v0.0.1
+kind: Function
+metadata:
+  id: logos.seo.function.requires-human-review
+  apiName: RequiresHumanReview
+  displayName:
+    en: Requires Human Review
+    ja: 人によるレビューが必要か
+  description:
+    en: "Whether a cause hypothesis must be reviewed before anyone relies on it (Workflow §10 rule 4). In this PoC every
+      hypothesis is reviewed; the function flags the uncertain or complex ones: confidence LOW or an AMBIGUOUS
+      condition."
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+spec:
+  functionKind: deterministic
+  inputs:
+    - parameterId: confidence
+      apiName: confidence
+      description:
+        en: Hypothesis confidence.
+      typeRef: logos.seo.value.confidence-level
+      required: true
+      nullable: false
+    - parameterId: condition-type
+      apiName: conditionType
+      description:
+        en: Type of the condition that fired.
+      typeRef: logos.seo.value.condition-type
+      required: true
+      nullable: false
+  output:
+    parameterId: requires-review
+    apiName: requiresReview
+    description:
+      en: True when the hypothesis is uncertain or the condition ambiguous.
+    typeRef: logos.seo.value.seo-boolean
+    required: true
+    nullable: false
+  implementation:
+    implementationKind: expression
+    implementationRef: expr:seo/requires-human-review
+    implementationVersion: 0.0.1
+    expression: input.confidence == 'LOW' or input.conditionType == 'AMBIGUOUS'
+    cachePolicy: request
+  failureMode: fail_closed
+  security:
+    classification: internal

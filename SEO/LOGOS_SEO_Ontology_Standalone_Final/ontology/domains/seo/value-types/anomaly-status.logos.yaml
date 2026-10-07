@@ -1,0 +1,58 @@
+apiVersion: logos.ontology/v0.0.1
+kind: ValueType
+metadata:
+  id: logos.seo.value.anomaly-status
+  apiName: AnomalyStatus
+  displayName:
+    en: Anomaly Status
+    ja: 異常ステータス
+  description:
+    en: Governed lifecycle state of an SEO Anomaly (design §8).
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+spec:
+  valueKind: vocabulary
+  vocabularyValues:
+    - code: DETECTED
+      apiName: Detected
+      displayName:
+        en: Detected
+        ja: 検知
+      description:
+        en: Created by the system when a significant change is detected.
+      ordinal: 10
+    - code: TRIAGED
+      apiName: Triaged
+      displayName:
+        en: Triaged
+        ja: トリアージ済
+      description:
+        en: The SEO team has reviewed the anomaly.
+      ordinal: 20
+    - code: COUNTERMEASURE_ASSIGNED
+      apiName: CountermeasureAssigned
+      displayName:
+        en: Countermeasure Assigned
+        ja: 対策割当済
+      description:
+        en: A countermeasure owner has been assigned.
+      ordinal: 30
+    - code: RESOLVED
+      apiName: Resolved
+      displayName:
+        en: Resolved
+        ja: 解決
+      description:
+        en: The anomaly has been resolved.
+      ordinal: 40
+    - code: DISMISSED
+      apiName: Dismissed
+      displayName:
+        en: Dismissed
+        ja: 対応不要
+      description:
+        en: The SEO team judged that no action is needed.
+      ordinal: 50

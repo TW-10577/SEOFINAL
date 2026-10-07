@@ -1,0 +1,70 @@
+apiVersion: logos.ontology/v0.0.1
+kind: Function
+metadata:
+  id: logos.seo.function.is-change-significant
+  apiName: IsChangeSignificant
+  displayName:
+    en: Is Change Significant
+    ja: 有意な変化か
+  description:
+    en: Compares one week-on-week change with one judgment condition. Inclusive ("±3.9% or more"). Returns NOT_EVALUABLE —
+      never NOT_SIGNIFICANT — when the threshold is missing, the unit is UNRESOLVED, or the rate is undefined.
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+spec:
+  functionKind: deterministic
+  inputs:
+    - parameterId: change-rate
+      apiName: changeRate
+      description:
+        en: Week-on-week change rate (percent); NULL when the previous value is 0.
+      typeRef: logos.seo.value.change-rate
+      required: true
+      nullable: true
+    - parameterId: absolute-change
+      apiName: absoluteChange
+      description:
+        en: Current − previous.
+      typeRef: logos.seo.value.absolute-change
+      required: true
+      nullable: false
+    - parameterId: threshold-value
+      apiName: thresholdValue
+      description:
+        en: Condition threshold; NULL when not configured.
+      typeRef: logos.seo.value.threshold-value
+      required: true
+      nullable: true
+    - parameterId: unit
+      apiName: unit
+      description:
+        en: Threshold unit.
+      typeRef: logos.seo.value.threshold-unit
+      required: true
+      nullable: false
+    - parameterId: direction
+      apiName: direction
+      description:
+        en: Direction the condition watches.
+      typeRef: logos.seo.value.change-direction
+      required: true
+      nullable: false
+  output:
+    parameterId: result
+    apiName: result
+    description:
+      en: SIGNIFICANT, NOT_SIGNIFICANT or NOT_EVALUABLE.
+    typeRef: logos.seo.value.significance-result
+    required: true
+    nullable: false
+  implementation:
+    implementationKind: service
+    implementationRef: service:seo/is-change-significant
+    implementationVersion: 0.0.1
+    cachePolicy: request
+  failureMode: fail_closed
+  security:
+    classification: internal

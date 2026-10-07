@@ -1,0 +1,27 @@
+apiVersion: logos.ontology/v0.0.1
+kind: ValueType
+metadata:
+  id: logos.seo.value.threshold-value
+  apiName: ThresholdValue
+  displayName:
+    en: Threshold Value
+    ja: 閾値
+  description:
+    en: Threshold of a judgment condition, supplied or approved by the SEO team. Its unit is given by the condition's
+      threshold unit.
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+spec:
+  valueKind: semantic
+  baseTypeRef: logos.seo.value.seo-decimal
+  constraints:
+    - constraintKind: range
+      parameters:
+        minimum: 0
+      severity: error
+      code: THRESHOLD_NEGATIVE
+      message:
+        en: A threshold is a magnitude; the direction says which way.

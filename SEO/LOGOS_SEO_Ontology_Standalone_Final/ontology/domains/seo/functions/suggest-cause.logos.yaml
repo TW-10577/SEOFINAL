@@ -1,0 +1,56 @@
+apiVersion: logos.ontology/v0.0.1
+kind: Function
+metadata:
+  id: logos.seo.function.suggest-cause
+  apiName: SuggestCause
+  displayName:
+    en: Suggest Cause
+    ja: 原因の提案
+  description:
+    en: Generates a possible cause for an anomaly from its numbers, the available evidence and the client rule's What to
+      Check Next. Design A6 calls for an AI hypothesis; the PoC implementation applies the client rules
+      deterministically (rules first) and records the same evidence. The output is always a hypothesis for SEO team
+      review.
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+spec:
+  functionKind: model_based
+  inputs:
+    - parameterId: anomaly-summary
+      apiName: anomalySummary
+      description:
+        en: Numbers and evidence of the anomaly.
+      typeRef: logos.seo.value.seo-text
+      required: true
+      nullable: false
+  output:
+    parameterId: hypothesis
+    apiName: hypothesis
+    description:
+      en: Possible cause text; UNKNOWN when nothing can be suggested, never an empty string.
+    typeRef: logos.seo.value.cause-text
+    required: false
+    nullable: true
+  implementation:
+    implementationKind: model
+    implementationRef: model:seo/cause-suggester
+    implementationVersion: 0.0.1
+    timeout: PT20S
+  failureMode: return_unknown
+  modelContract:
+    modelPolicyRef: logos.seo.policy.model-usage
+    modelRef: model:seo/cause-suggester
+    promptRef: prompt:seo/suggest-cause@1
+    structuredOutputTypeRef: logos.seo.value.cause-text
+    confidenceSemantics:
+      scale: registered_scale
+      comparableAcross: none
+      meaning: High / Medium / Low as defined on logos.seo.value.confidence-level. Not a probability.
+      belowMinimumBehavior: Low-confidence hypotheses are still produced and flagged by RequiresHumanReview.
+    evidenceTypeRef: logos.seo.evidence.model-inference-record
+    recordInputHash: true
+  security:
+    classification: internal

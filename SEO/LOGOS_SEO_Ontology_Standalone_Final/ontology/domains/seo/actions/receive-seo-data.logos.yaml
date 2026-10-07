@@ -1,0 +1,118 @@
+apiVersion: logos.ontology/v0.0.1
+kind: ActionType
+metadata:
+  id: logos.seo.action.receive-seo-data
+  apiName: ReceiveSEOData
+  displayName:
+    en: Receive SEO Data
+    ja: SEO データの受領
+  description:
+    en: A1. The SEO team uploads a GA4 or Search Console CSV/Excel export; the system reads it, keeps every source row as
+      evidence and creates SEO Data values marked VALID or INVALID.
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+  annotations:
+    logos.ext/design-source: LOGOS_SEO_Ontology_Design.md_.md §5 A1
+    logos.ext/performed-by: SEO team uploads → System
+spec:
+  target:
+    targetTypeRef: logos.seo.object.seo-data
+    targetMode: create_instance
+  inputs:
+    - inputId: data-source
+      apiName: dataSource
+      description:
+        en: GA4 or GSC, chosen on upload; checked against the file contents.
+      typeRef: logos.seo.value.data-source
+      required: true
+    - inputId: analysis-period
+      apiName: analysisPeriod
+      description:
+        en: The period the values cover (from the dates in the file or the export header).
+      typeRef: logos.seo.object.analysis-period
+      required: true
+  riskLevel: low
+  authorizationPolicyBindings:
+    - bindingId: primary-authorization
+      policyRef: logos.seo.policy.can-upload-seo-data
+  approval:
+    mode: none
+    reapprovalOnChange:
+      - input
+    recordComments: true
+  effects:
+    - effectId: create
+      effectKind: create_object
+      targetExpression: logos.seo.object.seo-data
+      atomicGroup: receive
+    - effectId: set-source
+      effectKind: update_property
+      propertyRef: "#property/data-source"
+      valueExpression: input.dataSource
+      atomicGroup: receive
+    - effectId: set-quality
+      effectKind: update_property
+      propertyRef: "#property/quality-status"
+      valueExpression: "'VALID'"
+      atomicGroup: receive
+    - effectId: link-period
+      effectKind: add_relation
+      targetExpression: logos.seo.relation.seo-data-measured-in-period
+      atomicGroup: receive
+  evidenceRequirements:
+    - evidenceTypeRef: logos.seo.evidence.source-record
+      onMissing: deny
+  idempotency:
+    keyExpression: concat(action.id, ':', target.id, ':', request.id)
+    scope: target_action
+    retention: P30D
+    onDuplicate: return_original_receipt
+    inputMismatchBehavior: reject
+    inputHashRequired: true
+  concurrency:
+    strategy: optimistic_version
+    tokenExpression: target.version
+    onConflict: reject
+    maxRetries: 0
+  execution:
+    executionMode: internal_atomic
+  failure:
+    failureClasses:
+      - validation
+      - authorization
+      - concurrency
+      - unknown
+    retryableClasses: []
+    compensationMode: manual_recovery
+    unknownResultPolicy: freeze_and_escalate
+  receipt:
+    required: true
+  observation:
+    required: true
+    strategy: read_back_after_commit
+    deadline: PT30S
+  reconciliation:
+    strategy: typed_comparison
+    successCriteria:
+      - target.dataSource == input.dataSource
+    onUnknown: freeze_and_escalate
+  security:
+    classification: internal
+    agentRestrictions:
+      defaultAgentMode: propose_only
+      externalWriteAllowed: false
+  audit:
+    enabled: true
+    eventCategories:
+      - action
+      - property_change
+    recordBeforeAfter: true
+    recordInputHash: true
+    recordEvidenceRefs: true
+    recordReleaseRefs: true
+    recordActionChain: true
+    integrityMode: hash_chain
+    retentionPolicyRef: logos.seo.policy.audit-retention

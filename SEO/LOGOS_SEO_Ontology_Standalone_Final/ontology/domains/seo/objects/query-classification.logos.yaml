@@ -1,0 +1,125 @@
+apiVersion: logos.ontology/v0.0.1
+kind: ObjectType
+metadata:
+  id: logos.seo.object.query-classification
+  apiName: QueryClassification
+  displayName:
+    en: Query Classification
+    ja: クエリ分類
+  description:
+    en: The brand division or category division applied to a query, and the rule or source it came from. Fully manual today
+      with no master database (ECM-04).
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+  annotations:
+    logos.ext/design-source: LOGOS_SEO_Ontology_Design.md_.md §6 O3
+spec:
+  semanticKind: business_concept
+  identity:
+    strategy: system_generated
+    primaryPropertyRef: "#property/classification-id"
+  titlePropertyRef: "#property/classification-value"
+  properties:
+    - memberId: classification-id
+      apiName: classificationId
+      displayName:
+        en: Classification ID
+        ja: 分類 ID
+      description:
+        en: System-generated identifier.
+      valueTypeRef: logos.seo.value.seo-id
+      valueMode: stored
+      required: true
+      nullable: false
+      immutable: true
+      sensitivity: internal
+      sourceAuthority:
+        authorityKind: internal
+        retainCandidates: true
+        riskLevel: high
+    - memberId: classification-type
+      apiName: classificationType
+      displayName:
+        en: Classification Type
+        ja: 分類タイプ
+      description:
+        en: Brand division or category division.
+      valueTypeRef: logos.seo.value.classification-type
+      valueMode: stored
+      required: true
+      nullable: false
+      writableByActionRefs:
+        - logos.seo.action.receive-seo-data
+      sensitivity: internal
+      sourceAuthority:
+        authorityKind: internal
+        retainCandidates: true
+        riskLevel: medium
+    - memberId: classification-value
+      apiName: classificationValue
+      displayName:
+        en: Classification Value
+        ja: 分類値
+      description:
+        en: The value assigned, e.g. OWN_BRAND, GENERIC or a category code.
+      valueTypeRef: logos.seo.value.seo-string
+      valueMode: stored
+      required: true
+      nullable: false
+      writableByActionRefs:
+        - logos.seo.action.receive-seo-data
+      sensitivity: internal
+      sourceAuthority:
+        authorityKind: internal
+        retainCandidates: true
+        riskLevel: medium
+    - memberId: rule-or-source
+      apiName: ruleOrSource
+      displayName:
+        en: Rule or Source
+        ja: ルール・出典
+      description:
+        en: Which rule or source produced the classification, e.g. the provisional brand term list.
+      valueTypeRef: logos.seo.value.seo-text
+      valueMode: stored
+      required: false
+      nullable: true
+      writableByActionRefs:
+        - logos.seo.action.receive-seo-data
+      sensitivity: internal
+      sourceAuthority:
+        authorityKind: internal
+        retainCandidates: true
+        riskLevel: medium
+  sourceAuthorityDefault:
+    authorityKind: internal
+    retainCandidates: true
+  temporal:
+    mode: none
+  security:
+    classification: internal
+    tenantScope: organization
+    policyCombining: deny_overrides
+    readPolicyRefs:
+      - logos.seo.policy.internal-reader
+    queryPolicyRefs:
+      - logos.seo.policy.internal-reader
+    executionPolicyRefs:
+      - logos.seo.policy.seo-system-execution
+    agentRestrictions:
+      defaultAgentMode: propose_only
+      externalWriteAllowed: false
+  audit:
+    enabled: true
+    eventCategories:
+      - query
+      - property_change
+      - action
+      - evidence
+    recordBeforeAfter: true
+    recordEvidenceRefs: true
+    recordReleaseRefs: true
+    integrityMode: hash_chain

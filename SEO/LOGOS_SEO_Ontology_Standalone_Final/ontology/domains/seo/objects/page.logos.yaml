@@ -1,0 +1,92 @@
+apiVersion: logos.ontology/v0.0.1
+kind: ObjectType
+metadata:
+  id: logos.seo.object.page
+  apiName: Page
+  displayName:
+    en: Page
+    ja: ページ
+  description:
+    en: A page of the e-commerce site that is monitored.
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+  annotations:
+    logos.ext/design-source: LOGOS_SEO_Ontology_Design.md_.md §6 O2
+spec:
+  semanticKind: business_concept
+  identity:
+    strategy: source_bound
+    primaryPropertyRef: "#property/page-url"
+  titlePropertyRef: "#property/page-url"
+  properties:
+    - memberId: page-url
+      apiName: pageUrl
+      displayName:
+        en: Page URL
+        ja: ページ URL
+      description:
+        en: Full URL as exported by Search Console.
+      valueTypeRef: logos.seo.value.page-url
+      valueMode: stored
+      required: true
+      nullable: false
+      immutable: true
+      sensitivity: internal
+      sourceBindingRefs:
+        - logos.seo.binding.gsc-csv
+      sourceAuthority:
+        authorityKind: external
+        primarySourceRef: file:gsc-csv
+        retainCandidates: true
+        riskLevel: high
+    - memberId: page-title
+      apiName: pageTitle
+      displayName:
+        en: Page Title
+        ja: ページタイトル
+      description:
+        en: Optional page title.
+      valueTypeRef: logos.seo.value.page-title
+      valueMode: stored
+      required: false
+      nullable: true
+      writableByActionRefs:
+        - logos.seo.action.receive-seo-data
+      sensitivity: internal
+      sourceAuthority:
+        authorityKind: internal
+        retainCandidates: true
+        riskLevel: medium
+  sourceAuthorityDefault:
+    authorityKind: external
+    primarySourceRef: file:gsc-csv
+    retainCandidates: true
+  temporal:
+    mode: none
+  security:
+    classification: internal
+    tenantScope: organization
+    policyCombining: deny_overrides
+    readPolicyRefs:
+      - logos.seo.policy.internal-reader
+    queryPolicyRefs:
+      - logos.seo.policy.internal-reader
+    executionPolicyRefs:
+      - logos.seo.policy.seo-system-execution
+    agentRestrictions:
+      defaultAgentMode: propose_only
+      externalWriteAllowed: false
+  audit:
+    enabled: true
+    eventCategories:
+      - query
+      - property_change
+      - action
+      - evidence
+    recordBeforeAfter: true
+    recordEvidenceRefs: true
+    recordReleaseRefs: true
+    integrityMode: hash_chain

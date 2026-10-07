@@ -1,0 +1,95 @@
+apiVersion: logos.ontology/v0.0.1
+kind: ObjectType
+metadata:
+  id: logos.seo.object.traffic-source
+  apiName: TrafficSource
+  displayName:
+    en: Traffic Source
+    ja: 流入元
+  description:
+    en: An inflow channel seen in GA4 — organic, paid (advertising), display and so on. Identified by the GA4 segment name
+      as exported.
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+  annotations:
+    logos.ext/design-source: LOGOS_SEO_Ontology_Design.md_.md §6 O4
+    logos.ext/confirmation-status: unconfirmed
+    logos.ext/unconfirmed-item: オーガニックサーチ → ORGANIC, ペイド系合算 → PAID (advertising)
+spec:
+  semanticKind: business_concept
+  identity:
+    strategy: source_bound
+    primaryPropertyRef: "#property/segment-name"
+  titlePropertyRef: "#property/segment-name"
+  properties:
+    - memberId: segment-name
+      apiName: segmentName
+      displayName:
+        en: GA4 Segment
+        ja: GA4 セグメント
+      description:
+        en: GA4 segment name as exported, e.g. 通販（全体） オーガニックサーチ.
+      valueTypeRef: logos.seo.value.seo-string
+      valueMode: stored
+      required: true
+      nullable: false
+      immutable: true
+      sensitivity: internal
+      sourceBindingRefs:
+        - logos.seo.binding.ga4-csv
+      sourceAuthority:
+        authorityKind: external
+        primarySourceRef: file:ga4-csv
+        retainCandidates: true
+        riskLevel: high
+    - memberId: channel-group
+      apiName: channelGroup
+      displayName:
+        en: Channel Group
+        ja: チャネルグループ
+      description:
+        en: Organic / paid / display / other. The mapping from segment to channel is to be confirmed by the client.
+      valueTypeRef: logos.seo.value.traffic-channel
+      valueMode: stored
+      required: false
+      nullable: true
+      writableByActionRefs:
+        - logos.seo.action.receive-seo-data
+      sensitivity: internal
+      sourceAuthority:
+        authorityKind: internal
+        retainCandidates: true
+        riskLevel: medium
+  sourceAuthorityDefault:
+    authorityKind: external
+    primarySourceRef: file:ga4-csv
+    retainCandidates: true
+  temporal:
+    mode: none
+  security:
+    classification: internal
+    tenantScope: organization
+    policyCombining: deny_overrides
+    readPolicyRefs:
+      - logos.seo.policy.internal-reader
+    queryPolicyRefs:
+      - logos.seo.policy.internal-reader
+    executionPolicyRefs:
+      - logos.seo.policy.seo-system-execution
+    agentRestrictions:
+      defaultAgentMode: propose_only
+      externalWriteAllowed: false
+  audit:
+    enabled: true
+    eventCategories:
+      - query
+      - property_change
+      - action
+      - evidence
+    recordBeforeAfter: true
+    recordEvidenceRefs: true
+    recordReleaseRefs: true
+    integrityMode: hash_chain

@@ -1,0 +1,39 @@
+apiVersion: logos.ontology/v0.0.1
+kind: EvidenceType
+metadata:
+  id: logos.seo.evidence.human-decision-record
+  apiName: SEOHumanDecisionRecord
+  displayName:
+    en: SEO Team Decision Record
+    ja: SEO チーム判断記録
+  description:
+    en: Who on the SEO team moved an anomaly, cause or countermeasure, when, and with what note.
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+spec:
+  retentionPolicyRef: logos.seo.policy.evidence-retention
+  contentTypeRef: logos.seo.value.seo-text
+  classification: internal
+  evidenceKind: human_attestation
+  requiredRuntimeFields:
+    - evidenceId
+    - objectRef
+    - contentHash
+    - acquiredAt
+    - producer
+    - observedAt
+  integrityMode: signed
+  permittedUses:
+    - human_review
+    - human_decision_traceability
+  revocationMode: none
+  security:
+    classification: internal
+  audit:
+    enabled: true
+    eventCategories:
+      - evidence
+    recordReleaseRefs: true

@@ -1,0 +1,22 @@
+apiVersion: logos.ontology/v0.0.1
+kind: ValueType
+metadata:
+  id: logos.seo.value.analysis-period
+  apiName: AnalysisPeriodRange
+  displayName:
+    en: Analysis Period (date range)
+    ja: 分析期間（日付範囲）
+  description:
+    en: Start and end date, YYYY-MM-DD to YYYY-MM-DD. Weekly for the PoC.
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+spec:
+  valueKind: structured
+  fields:
+    - apiName: start
+      valueTypeRef: logos.seo.value.seo-date
+    - apiName: end
+      valueTypeRef: logos.seo.value.seo-date

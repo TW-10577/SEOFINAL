@@ -1,0 +1,26 @@
+apiVersion: logos.ontology/v0.0.1
+kind: OntologyPackage
+metadata:
+  id: logos.platform.package.root
+  apiName: PlatformRoot
+  displayName:
+    en: SEO Release Root
+  description:
+    en: Root package that assembles the release closure of the standalone SEO ontology. Holds no business semantics.
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+spec:
+  packageKind: root
+  namespace: platform
+  defaultLocale: en
+  requiredLocales:
+    - en
+  validationProfileRefs: []
+  dependencies:
+    - packageRef: logos.seo.package.seo
+      versionConstraint: ^0.0.1
+      alias: seo
+      required: true
+      exposed: true

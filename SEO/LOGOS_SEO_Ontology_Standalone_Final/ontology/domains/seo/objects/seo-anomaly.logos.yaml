@@ -1,0 +1,283 @@
+apiVersion: logos.ontology/v0.0.1
+kind: ObjectType
+metadata:
+  id: logos.seo.object.seo-anomaly
+  apiName: SEOAnomaly
+  displayName:
+    en: SEO Anomaly
+    ja: SEO 異常
+  description:
+    en: A significant change detected on one analysis unit and one metric. Created by the system in DETECTED; only the SEO
+      team moves it forward.
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+  annotations:
+    logos.ext/design-source: LOGOS_SEO_Ontology_Design.md_.md §6 O8, §8
+spec:
+  semanticKind: business_concept
+  identity:
+    strategy: system_generated
+    primaryPropertyRef: "#property/anomaly-id"
+  titlePropertyRef: "#property/metric"
+  properties:
+    - memberId: anomaly-id
+      apiName: anomalyId
+      displayName:
+        en: Anomaly ID
+        ja: 異常 ID
+      description:
+        en: System-generated identifier.
+      valueTypeRef: logos.seo.value.seo-id
+      valueMode: stored
+      required: true
+      nullable: false
+      immutable: true
+      sensitivity: internal
+      sourceAuthority:
+        authorityKind: internal
+        retainCandidates: true
+        riskLevel: high
+    - memberId: subject-type
+      apiName: subjectType
+      displayName:
+        en: Subject Type
+        ja: 対象の種類
+      description:
+        en: Site, traffic source, query or page. The subject itself is the DETECTED_ON relation of that type.
+      valueTypeRef: logos.seo.value.analysis-unit-type
+      valueMode: stored
+      required: true
+      nullable: false
+      writableByActionRefs:
+        - logos.seo.action.register-seo-anomaly
+      sensitivity: internal
+      sourceAuthority:
+        authorityKind: internal
+        retainCandidates: true
+        riskLevel: medium
+    - memberId: metric
+      apiName: metric
+      displayName:
+        en: Metric
+        ja: 指標
+      description:
+        en: Metric that changed.
+      valueTypeRef: logos.seo.value.seo-string
+      valueMode: stored
+      required: true
+      nullable: false
+      writableByActionRefs:
+        - logos.seo.action.register-seo-anomaly
+      sensitivity: internal
+      sourceAuthority:
+        authorityKind: internal
+        retainCandidates: true
+        riskLevel: medium
+    - memberId: previous-value
+      apiName: previousValue
+      displayName:
+        en: Previous Value
+        ja: 前期の値
+      description:
+        en: Value in the previous period.
+      valueTypeRef: logos.seo.value.seo-decimal
+      valueMode: stored
+      required: true
+      nullable: false
+      writableByActionRefs:
+        - logos.seo.action.register-seo-anomaly
+      sensitivity: internal
+      sourceAuthority:
+        authorityKind: internal
+        retainCandidates: true
+        riskLevel: medium
+    - memberId: current-value
+      apiName: currentValue
+      displayName:
+        en: Current Value
+        ja: 今期の値
+      description:
+        en: Value in the current period.
+      valueTypeRef: logos.seo.value.seo-decimal
+      valueMode: stored
+      required: true
+      nullable: false
+      writableByActionRefs:
+        - logos.seo.action.register-seo-anomaly
+      sensitivity: internal
+      sourceAuthority:
+        authorityKind: internal
+        retainCandidates: true
+        riskLevel: medium
+    - memberId: change
+      apiName: change
+      displayName:
+        en: Change
+        ja: 変化
+      description:
+        en: Current − previous.
+      valueTypeRef: logos.seo.value.absolute-change
+      valueMode: stored
+      required: true
+      nullable: false
+      writableByActionRefs:
+        - logos.seo.action.register-seo-anomaly
+      sensitivity: internal
+      sourceAuthority:
+        authorityKind: internal
+        retainCandidates: true
+        riskLevel: medium
+    - memberId: change-rate
+      apiName: changeRate
+      displayName:
+        en: Change Rate
+        ja: 変化率
+      description:
+        en: Week-on-week change rate; NULL only when a percentage-point condition fired on a zero baseline.
+      valueTypeRef: logos.seo.value.change-rate
+      valueMode: stored
+      required: false
+      nullable: true
+      writableByActionRefs:
+        - logos.seo.action.register-seo-anomaly
+      sensitivity: internal
+      sourceAuthority:
+        authorityKind: internal
+        retainCandidates: true
+        riskLevel: medium
+    - memberId: detection-date
+      apiName: detectionDate
+      displayName:
+        en: Detection Date
+        ja: 検知日
+      description:
+        en: Date of detection.
+      valueTypeRef: logos.seo.value.detection-date
+      valueMode: stored
+      required: true
+      nullable: false
+      writableByActionRefs:
+        - logos.seo.action.register-seo-anomaly
+      sensitivity: internal
+      sourceAuthority:
+        authorityKind: internal
+        retainCandidates: true
+        riskLevel: medium
+    - memberId: status
+      apiName: status
+      displayName:
+        en: Status
+        ja: ステータス
+      description:
+        en: Lifecycle state. Written only by the transition actions.
+      valueTypeRef: logos.seo.value.anomaly-status
+      valueMode: stored
+      required: true
+      nullable: false
+      writableByActionRefs:
+        - logos.seo.action.triage-anomaly
+        - logos.seo.action.assign-countermeasure-owner
+        - logos.seo.action.resolve-anomaly
+        - logos.seo.action.dismiss-anomaly
+      sensitivity: internal
+      sourceAuthority:
+        authorityKind: internal
+        retainCandidates: true
+        riskLevel: high
+  lifecycle:
+    statePropertyRef: "#property/status"
+    states:
+      - code: DETECTED
+        displayName:
+          en: Detected
+          ja: 検知
+        description:
+          en: Created by the system when a judgment condition returns SIGNIFICANT. The initial state.
+        initial: true
+        allowedActionRefs:
+          - logos.seo.action.triage-anomaly
+          - logos.seo.action.dismiss-anomaly
+      - code: TRIAGED
+        displayName:
+          en: Triaged
+          ja: トリアージ済
+        description:
+          en: The SEO team has reviewed the numbers and the possible cause.
+        allowedActionRefs:
+          - logos.seo.action.assign-countermeasure-owner
+      - code: COUNTERMEASURE_ASSIGNED
+        displayName:
+          en: Countermeasure Assigned
+          ja: 対策割当済
+        description:
+          en: An owner for the countermeasure has been assigned.
+        citable: true
+        allowedActionRefs:
+          - logos.seo.action.resolve-anomaly
+      - code: RESOLVED
+        displayName:
+          en: Resolved
+          ja: 解決
+        description:
+          en: Resolved. Terminal; a recurrence is a new anomaly.
+        terminal: true
+        citable: true
+      - code: DISMISSED
+        displayName:
+          en: Dismissed
+          ja: 対応不要
+        description:
+          en: The SEO team judged that no action is needed. Terminal.
+        terminal: true
+    transitions:
+      - transitionId: triage
+        fromState: DETECTED
+        toState: TRIAGED
+        actionRef: logos.seo.action.triage-anomaly
+      - transitionId: assign-countermeasure
+        fromState: TRIAGED
+        toState: COUNTERMEASURE_ASSIGNED
+        actionRef: logos.seo.action.assign-countermeasure-owner
+      - transitionId: resolve
+        fromState: COUNTERMEASURE_ASSIGNED
+        toState: RESOLVED
+        actionRef: logos.seo.action.resolve-anomaly
+      - transitionId: dismiss
+        fromState: DETECTED
+        toState: DISMISSED
+        actionRef: logos.seo.action.dismiss-anomaly
+    deletionMode: archive
+  sourceAuthorityDefault:
+    authorityKind: internal
+    retainCandidates: true
+  temporal:
+    mode: none
+  security:
+    classification: internal
+    tenantScope: organization
+    policyCombining: deny_overrides
+    readPolicyRefs:
+      - logos.seo.policy.internal-reader
+    queryPolicyRefs:
+      - logos.seo.policy.internal-reader
+    executionPolicyRefs:
+      - logos.seo.policy.seo-system-execution
+      - logos.seo.policy.can-review-seo-outcome
+    agentRestrictions:
+      defaultAgentMode: propose_only
+      externalWriteAllowed: false
+  audit:
+    enabled: true
+    eventCategories:
+      - query
+      - property_change
+      - action
+      - lifecycle
+      - evidence
+    recordBeforeAfter: true
+    recordEvidenceRefs: true
+    recordReleaseRefs: true
+    integrityMode: hash_chain

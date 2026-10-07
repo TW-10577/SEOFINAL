@@ -1,0 +1,34 @@
+apiVersion: logos.ontology/v0.0.1
+kind: ValueType
+metadata:
+  id: logos.seo.value.data-quality-status
+  apiName: DataQualityStatus
+  displayName:
+    en: Data Quality Status
+    ja: データ品質
+  description:
+    en: Result of Check and Standardize for one SEO Data value. Invalid data never silently becomes valid.
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+spec:
+  valueKind: vocabulary
+  vocabularyValues:
+    - code: VALID
+      apiName: Valid
+      displayName:
+        en: Valid
+        ja: 有効
+      description:
+        en: Passed every check.
+      ordinal: 10
+    - code: INVALID
+      apiName: Invalid
+      displayName:
+        en: Invalid
+        ja: 無効
+      description:
+        en: Failed a check (date, number, URL, missing value, duplicate); kept for traceability, never used in analysis.
+      ordinal: 20

@@ -1,0 +1,32 @@
+apiVersion: logos.ontology/v0.0.1
+kind: Policy
+metadata:
+  id: logos.seo.policy.seo-system-execution
+  apiName: SEOSystemExecution
+  displayName:
+    en: SEO System Execution
+  description:
+    en: Steps the system performs on its own (standardize, analyze, detect, register, propose, report) run only under the
+      SEO system identity. They create suggestions; they never confirm, approve or execute.
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+spec:
+  policyKind: authorization
+  decisionType: ALLOW_DENY
+  evaluation:
+    evaluationKind: expression
+    implementationRef: expr:seo/seo-system-execution
+    implementationVersion: 0.0.1
+    expression: "'seo-system' in actor.roles"
+    failureDecision: DENY
+    timeout: PT2S
+  audit:
+    enabled: true
+    eventCategories:
+      - policy
+    recordReleaseRefs: true
+    integrityMode: hash_chain
+    retentionPolicyRef: logos.seo.policy.audit-retention

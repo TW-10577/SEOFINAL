@@ -1,0 +1,44 @@
+apiVersion: logos.ontology/v0.0.1
+kind: ValueType
+metadata:
+  id: logos.seo.value.confidence-level
+  apiName: ConfidenceLevel
+  displayName:
+    en: Confidence Level
+    ja: 信頼度
+  description:
+    en: "Confidence attached to a cause hypothesis. HIGH: a client-rule branch matched with complete data and confirmed
+      mappings; MEDIUM: a branch matched but depends on an unconfirmed mapping or unavailable supporting evidence; LOW:
+      no client-rule branch applies."
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+spec:
+  valueKind: vocabulary
+  vocabularyValues:
+    - code: HIGH
+      apiName: High
+      displayName:
+        en: High
+        ja: 高
+      description:
+        en: Rule branch matched with complete data and confirmed mappings.
+      ordinal: 10
+    - code: MEDIUM
+      apiName: Medium
+      displayName:
+        en: Medium
+        ja: 中
+      description:
+        en: Rule branch matched, but it depends on an unconfirmed mapping or missing supporting evidence.
+      ordinal: 20
+    - code: LOW
+      apiName: Low
+      displayName:
+        en: Low
+        ja: 低
+      description:
+        en: No client-rule branch applies to the data.
+      ordinal: 30

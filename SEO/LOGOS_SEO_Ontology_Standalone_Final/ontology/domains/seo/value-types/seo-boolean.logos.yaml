@@ -1,0 +1,18 @@
+apiVersion: logos.ontology/v0.0.1
+kind: ValueType
+metadata:
+  id: logos.seo.value.seo-boolean
+  apiName: SEOBoolean
+  displayName:
+    en: Boolean
+    ja: 真偽値
+  description:
+    en: True or false.
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+spec:
+  valueKind: primitive
+  primitive: boolean

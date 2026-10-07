@@ -1,0 +1,18 @@
+apiVersion: logos.ontology/v0.0.1
+kind: ValueType
+metadata:
+  id: logos.seo.value.seo-integer
+  apiName: SEOInteger
+  displayName:
+    en: Integer
+    ja: 整数
+  description:
+    en: A whole number.
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+spec:
+  valueKind: primitive
+  primitive: integer

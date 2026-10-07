@@ -1,0 +1,27 @@
+apiVersion: logos.ontology/v0.0.1
+kind: ValueType
+metadata:
+  id: logos.seo.value.sessions
+  apiName: Sessions
+  displayName:
+    en: Sessions
+    ja: セッション
+  description:
+    en: GA4 sessions in a period (count).
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+spec:
+  valueKind: semantic
+  baseTypeRef: logos.seo.value.seo-integer
+  unit: count
+  constraints:
+    - constraintKind: range
+      parameters:
+        minimum: 0
+      severity: error
+      code: SESSIONS_NEGATIVE
+      message:
+        en: Sessions cannot be negative.

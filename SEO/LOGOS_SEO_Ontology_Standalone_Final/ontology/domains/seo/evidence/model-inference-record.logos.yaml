@@ -1,0 +1,45 @@
+apiVersion: logos.ontology/v0.0.1
+kind: EvidenceType
+metadata:
+  id: logos.seo.evidence.model-inference-record
+  apiName: SEOModelInferenceRecord
+  displayName:
+    en: SEO Model Inference Record
+    ja: SEO モデル推論記録
+  description:
+    en: "What a model produced when suggesting a cause: model, prompt version, confidence, time and input hash."
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+spec:
+  retentionPolicyRef: logos.seo.policy.evidence-retention
+  contentTypeRef: logos.seo.value.seo-text
+  classification: internal
+  evidenceKind: model_output
+  requiredRuntimeFields:
+    - evidenceId
+    - objectRef
+    - contentHash
+    - acquiredAt
+    - producer
+    - confidence
+    - modelMetadata
+  integrityMode: signed
+  permittedUses:
+    - model_output_traceability
+    - human_review_of_model_candidates
+  revocationMode: supersession
+  modelMetadataRequired: true
+  confidence:
+    scale: registered_scale
+    meaning: human_assessment
+    unknownAllowed: true
+  security:
+    classification: internal
+  audit:
+    enabled: true
+    eventCategories:
+      - evidence
+    recordReleaseRefs: true

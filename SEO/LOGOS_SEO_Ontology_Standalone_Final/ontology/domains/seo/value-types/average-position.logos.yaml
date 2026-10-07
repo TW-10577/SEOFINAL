@@ -1,0 +1,27 @@
+apiVersion: logos.ontology/v0.0.1
+kind: ValueType
+metadata:
+  id: logos.seo.value.average-position
+  apiName: AveragePosition
+  displayName:
+    en: Average Position
+    ja: 平均掲載順位
+  description:
+    en: Average search ranking position; lower is better. One decimal place in the export.
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+spec:
+  valueKind: semantic
+  baseTypeRef: logos.seo.value.seo-decimal
+  unit: rank
+  constraints:
+    - constraintKind: range
+      parameters:
+        minimum: 1
+      severity: error
+      code: POSITION_RANGE
+      message:
+        en: Average position starts at 1.

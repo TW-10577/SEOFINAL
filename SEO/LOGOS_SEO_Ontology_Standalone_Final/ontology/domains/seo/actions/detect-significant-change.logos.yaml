@@ -1,0 +1,87 @@
+apiVersion: logos.ontology/v0.0.1
+kind: ActionType
+metadata:
+  id: logos.seo.action.detect-significant-change
+  apiName: DetectSignificantChange
+  displayName:
+    en: Detect Significant Change
+    ja: 有意な変化の検知
+  description:
+    en: "A4. Evaluates each judgment condition with DetectSignificantChange / IsChangeSignificant. Not significant: nothing
+      is created and the next week repeats the check. Significant: Register SEO Anomaly follows."
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+  annotations:
+    logos.ext/design-source: LOGOS_SEO_Ontology_Design.md_.md §5 A4
+    logos.ext/performed-by: System
+spec:
+  target:
+    targetTypeRef: logos.seo.object.judgment-condition
+    targetMode: existing_instance
+  riskLevel: low
+  authorizationPolicyBindings:
+    - bindingId: primary-authorization
+      policyRef: logos.seo.policy.seo-system-execution
+  approval:
+    mode: none
+    reapprovalOnChange:
+      - input
+    recordComments: true
+  effects:
+    - effectId: evaluate-only
+      effectKind: no_effect
+      atomicGroup: detect
+  idempotency:
+    keyExpression: concat(action.id, ':', target.id, ':', request.id)
+    scope: target_action
+    retention: P30D
+    onDuplicate: return_original_receipt
+    inputMismatchBehavior: reject
+    inputHashRequired: true
+  concurrency:
+    strategy: optimistic_version
+    tokenExpression: target.version
+    onConflict: reject
+    maxRetries: 0
+  execution:
+    executionMode: internal_atomic
+  failure:
+    failureClasses:
+      - validation
+      - authorization
+      - concurrency
+      - unknown
+    retryableClasses: []
+    compensationMode: manual_recovery
+    unknownResultPolicy: freeze_and_escalate
+  receipt:
+    required: true
+  observation:
+    required: true
+    strategy: read_back_after_commit
+    deadline: PT30S
+  reconciliation:
+    strategy: typed_comparison
+    successCriteria:
+      - "true"
+    onUnknown: freeze_and_escalate
+  security:
+    classification: internal
+    agentRestrictions:
+      defaultAgentMode: propose_only
+      externalWriteAllowed: false
+  audit:
+    enabled: true
+    eventCategories:
+      - action
+      - function
+    recordBeforeAfter: true
+    recordInputHash: true
+    recordEvidenceRefs: true
+    recordReleaseRefs: true
+    recordActionChain: true
+    integrityMode: hash_chain
+    retentionPolicyRef: logos.seo.policy.audit-retention

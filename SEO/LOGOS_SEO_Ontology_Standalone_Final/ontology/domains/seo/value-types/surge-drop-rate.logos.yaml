@@ -1,0 +1,19 @@
+apiVersion: logos.ontology/v0.0.1
+kind: ValueType
+metadata:
+  id: logos.seo.value.surge-drop-rate
+  apiName: SurgeDropRate
+  displayName:
+    en: Surge / Drop Rate
+    ja: 急増・急減率
+  description:
+    en: Surge or drop rate requested in ECM-04; its basis is to be confirmed. A calculated value.
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+spec:
+  valueKind: semantic
+  baseTypeRef: logos.seo.value.seo-decimal
+  unit: percent

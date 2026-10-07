@@ -1,0 +1,67 @@
+apiVersion: logos.ontology/v0.0.1
+kind: SourceBinding
+metadata:
+  id: logos.seo.binding.gsc-csv
+  apiName: SearchConsolePerformanceExport
+  displayName:
+    en: Search Console Performance Export (CSV/Excel)
+    ja: Search Console 検索パフォーマンス エクスポート
+  description:
+    en: "Search Console Performance export: one tab per dimension (クエリ, ページ, 日付, デバイス, 国, 検索での見え方) plus フィルタ (export
+      conditions). The query and page tabs are 3-month totals capped at 1,000 rows; only the date tab has a time
+      dimension."
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+  annotations:
+    logos.ext/design-source: Data_Import_Method_Research.md §3–4; client files in SEO/Data
+spec:
+  bindingKind: property
+  direction: read
+  targets:
+    - logos.seo.object.search-query#property/query-text
+    - logos.seo.object.page#property/page-url
+    - logos.seo.object.seo-data#property/clicks
+    - logos.seo.object.seo-data#property/impressions
+    - logos.seo.object.seo-data#property/ctr
+    - logos.seo.object.seo-data#property/average-position
+    - logos.seo.object.seo-data#property/export-condition
+  source:
+    sourceRef: file:gsc-csv
+    connectorRef: connector:file-upload
+    dataProductRef: poc.seo.gsc-csv
+    schemaVersion: 0.0.1
+  mapping:
+    mappingKind: property
+    fieldMappings:
+      - sourcePath: クエリ[].上位のクエリ
+        targetRef: logos.seo.object.search-query#property/query-text
+      - sourcePath: ページ[].上位のページ
+        targetRef: logos.seo.object.page#property/page-url
+      - sourcePath: "*[].クリック数"
+        targetRef: logos.seo.object.seo-data#property/clicks
+      - sourcePath: "*[].表示回数"
+        targetRef: logos.seo.object.seo-data#property/impressions
+      - sourcePath: "*[].CTR"
+        targetRef: logos.seo.object.seo-data#property/ctr
+      - sourcePath: "*[].掲載順位"
+        targetRef: logos.seo.object.seo-data#property/average-position
+      - sourcePath: フィルタ[].値
+        targetRef: logos.seo.object.seo-data#property/export-condition
+    nullHandling: preserve_null
+    unknownValueHandling: quarantine
+  mode: manual
+  freshness:
+    mode: batch
+    onStale: stale_read_with_status
+    expectedLatency: P7D
+    staleAfter: P14D
+    ingestedAtRequired: true
+  degradation:
+    onUnavailable: mark_unknown
+    onStale: stale_read_with_status
+    onMappingError: quarantine
+    createOperationalIncident: true
+  lineageRequired: true

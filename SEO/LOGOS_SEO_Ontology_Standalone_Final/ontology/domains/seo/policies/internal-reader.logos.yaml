@@ -1,0 +1,31 @@
+apiVersion: logos.ontology/v0.0.1
+kind: Policy
+metadata:
+  id: logos.seo.policy.internal-reader
+  apiName: SEOInternalReader
+  displayName:
+    en: SEO Internal Reader
+  description:
+    en: Internal, authenticated users may read SEO data, anomalies, causes and countermeasures.
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+spec:
+  policyKind: authorization
+  decisionType: ALLOW_DENY
+  evaluation:
+    evaluationKind: expression
+    implementationRef: expr:seo/internal-reader
+    implementationVersion: 0.0.1
+    expression: actor.participantType == 'INTERNAL'
+    failureDecision: DENY
+    timeout: PT2S
+  audit:
+    enabled: true
+    eventCategories:
+      - policy
+    recordReleaseRefs: true
+    integrityMode: hash_chain
+    retentionPolicyRef: logos.seo.policy.audit-retention

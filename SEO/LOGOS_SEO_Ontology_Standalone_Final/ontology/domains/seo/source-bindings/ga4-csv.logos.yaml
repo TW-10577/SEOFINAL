@@ -1,0 +1,57 @@
+apiVersion: logos.ontology/v0.0.1
+kind: SourceBinding
+metadata:
+  id: logos.seo.binding.ga4-csv
+  apiName: GA4ExplorationsExport
+  displayName:
+    en: GA4 Explorations Export (CSV/Excel)
+    ja: GA4 探索エクスポート
+  description:
+    en: "GA4 Explorations free-form export: comment lines, a segment header row, a metric header row (日付 + metrics), a 総計
+      totals row and one row per day. Columns are identified by their two header cells, never by position."
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+  annotations:
+    logos.ext/design-source: Data_Import_Method_Research.md §3–4; client files in SEO/Data
+spec:
+  bindingKind: property
+  direction: read
+  targets:
+    - logos.seo.object.traffic-source#property/segment-name
+    - logos.seo.object.site#property/site-key
+    - logos.seo.object.seo-data#property/sessions
+    - logos.seo.object.seo-data#property/conversions
+  source:
+    sourceRef: file:ga4-csv
+    connectorRef: connector:file-upload
+    dataProductRef: poc.seo.ga4-csv
+    schemaVersion: 0.0.1
+  mapping:
+    mappingKind: property
+    fieldMappings:
+      - sourcePath: rows[].segment[セグメント]
+        targetRef: logos.seo.object.traffic-source#property/segment-name
+      - sourcePath: rows[].segment[通販（全体）]
+        targetRef: logos.seo.object.site#property/site-key
+      - sourcePath: rows[].metric[セッション]
+        targetRef: logos.seo.object.seo-data#property/sessions
+      - sourcePath: rows[].metric[e コマース購入数]
+        targetRef: logos.seo.object.seo-data#property/conversions
+    nullHandling: preserve_null
+    unknownValueHandling: quarantine
+  mode: manual
+  freshness:
+    mode: batch
+    onStale: stale_read_with_status
+    expectedLatency: P7D
+    staleAfter: P14D
+    ingestedAtRequired: true
+  degradation:
+    onUnavailable: mark_unknown
+    onStale: stale_read_with_status
+    onMappingError: quarantine
+    createOperationalIncident: true
+  lineageRequired: true

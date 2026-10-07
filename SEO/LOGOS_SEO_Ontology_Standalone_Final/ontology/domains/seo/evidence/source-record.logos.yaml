@@ -1,0 +1,40 @@
+apiVersion: logos.ontology/v0.0.1
+kind: EvidenceType
+metadata:
+  id: logos.seo.evidence.source-record
+  apiName: SEOSourceRecord
+  displayName:
+    en: SEO Source Record
+    ja: SEO ソースレコード
+  description:
+    en: One row of an uploaded GA4 or Search Console export, kept exactly as exported, with the upload it came from. Every
+      SEO Data value and every anomaly traces back to these rows.
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+spec:
+  retentionPolicyRef: logos.seo.policy.evidence-retention
+  contentTypeRef: logos.seo.value.seo-text
+  classification: internal
+  evidenceKind: source_snapshot
+  requiredRuntimeFields:
+    - evidenceId
+    - sourceRef
+    - locator
+    - objectRef
+    - contentHash
+    - acquiredAt
+  integrityMode: hash
+  permittedUses:
+    - anomaly_traceability
+    - data_quality_review
+  revocationMode: supersession
+  security:
+    classification: internal
+  audit:
+    enabled: true
+    eventCategories:
+      - evidence
+    recordReleaseRefs: true

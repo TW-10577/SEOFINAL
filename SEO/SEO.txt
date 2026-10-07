@@ -2,5 +2,6 @@
 No.	Judgment Criteria	Primary Judgment	What to Check Next	AI Judgment / Action
 ①	Traffic Acquisition — Sessions: ±3.9% or more WoW	Check the increase/decrease in organic and advertising traffic	If organic traffic decreases → Provide feedback to the SEO team. If advertising traffic decreases → Provide feedback to the advertising team. If both decrease → Report the one with the larger contribution to the decrease as the primary cause.	 
 ②	Purchase Efficiency — CVR: ±0.7% or more WoW	Check changes in sessions and CV	Sessions increase + CV remains flat/decreases → Check the quality of traffic. Sessions remain flat + CVR decreases → Check products, pricing, and pages. CVR and sessions both increase → Identify the factors contributing to the improvement.	 
- 
- 
+  ① supports: when organic ↓, Clicks, Impressions, CTR, Position per keyword show which keywords bring traffic (brand = 66%). 3-month total, no WoW	② not used: no sessions / CV in GSC
+① supports: when organic ↓, Clicks, Impressions, CTR, Position per page show which pages bring traffic (top page 19.6%, /gamepc 7.1%). 3-month total, no WoW	② not used: no sessions / CV in GSC
+① supports: when organic ↓, the daily chart (13 real weeks) shows the reason: Position worse = ranking dropped, Impressions ↓ = fewer searches, CTR ↓ = title/snippet problem	② not used: no sessions / CV in GSC

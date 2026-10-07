@@ -1,0 +1,21 @@
+{
+  "name": "logos-seo",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "shared",
+    "api",
+    "dashboard"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev -w api",
+    "dev:web": "npm run dev -w dashboard",
+    "test": "npm test -w api",
+    "typecheck": "npm run typecheck -w api && npm run typecheck -w dashboard",
+    "build": "npm run build -w dashboard",
+    "ontology:check": "bash scripts/check-ontology.sh"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

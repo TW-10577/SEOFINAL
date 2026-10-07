@@ -1,0 +1,18 @@
+apiVersion: logos.ontology/v0.0.1
+kind: ValueType
+metadata:
+  id: logos.seo.value.absolute-change
+  apiName: AbsoluteChange
+  displayName:
+    en: Absolute Change
+    ja: 絶対変化
+  description:
+    en: Current value − previous value, in the metric's own unit. A calculated value, not a persistent object.
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+spec:
+  valueKind: semantic
+  baseTypeRef: logos.seo.value.seo-decimal

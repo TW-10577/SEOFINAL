@@ -1,0 +1,177 @@
+apiVersion: logos.ontology/v0.0.1
+kind: ActionType
+metadata:
+  id: logos.seo.action.propose-countermeasure
+  apiName: ProposeCountermeasure
+  displayName:
+    en: Propose Countermeasure
+    ja: 対策の提案
+  description:
+    en: A7. Suggests the action the client rule names for the cause (e.g. feedback to the SEO team or the advertising team).
+      Created PROPOSED; the system never approves or executes it.
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+  annotations:
+    logos.ext/design-source: LOGOS_SEO_Ontology_Design.md_.md §5 A7
+    logos.ext/performed-by: System
+spec:
+  target:
+    targetTypeRef: logos.seo.object.countermeasure
+    targetMode: create_instance
+  inputs:
+    - inputId: countermeasure-text
+      apiName: countermeasureText
+      description:
+        en: Suggested action.
+      typeRef: logos.seo.value.cause-text
+      required: true
+    - inputId: reason
+      apiName: reason
+      description:
+        en: Why.
+      typeRef: logos.seo.value.cause-text
+      required: true
+    - inputId: responsible-team
+      apiName: responsibleTeam
+      description:
+        en: Team named by the rule.
+      typeRef: logos.seo.value.seo-string
+      nullable: true
+    - inputId: cause
+      apiName: cause
+      description:
+        en: The cause hypothesis the action answers.
+      typeRef: logos.seo.object.cause-hypothesis
+      required: true
+    - inputId: subject-site
+      apiName: subjectSite
+      description:
+        en: Site the change is about. Exactly one subject input is supplied, matching the subject type; the other subject
+          relations are not created.
+      typeRef: logos.seo.object.site
+      nullable: true
+    - inputId: subject-traffic-source
+      apiName: subjectTrafficSource
+      description:
+        en: Traffic source the change is about. Exactly one subject input is supplied, matching the subject type; the other
+          subject relations are not created.
+      typeRef: logos.seo.object.traffic-source
+      nullable: true
+    - inputId: subject-search-query
+      apiName: subjectSearchQuery
+      description:
+        en: Search query the change is about. Exactly one subject input is supplied, matching the subject type; the other
+          subject relations are not created.
+      typeRef: logos.seo.object.search-query
+      nullable: true
+    - inputId: subject-page
+      apiName: subjectPage
+      description:
+        en: Page the change is about. Exactly one subject input is supplied, matching the subject type; the other subject
+          relations are not created.
+      typeRef: logos.seo.object.page
+      nullable: true
+  riskLevel: medium
+  authorizationPolicyBindings:
+    - bindingId: primary-authorization
+      policyRef: logos.seo.policy.seo-system-execution
+  approval:
+    mode: none
+    reapprovalOnChange:
+      - input
+    recordComments: true
+  effects:
+    - effectId: create
+      effectKind: create_object
+      targetExpression: logos.seo.object.countermeasure
+      atomicGroup: propose
+    - effectId: set-text
+      effectKind: update_property
+      propertyRef: "#property/countermeasure-text"
+      valueExpression: input.countermeasureText
+      atomicGroup: propose
+    - effectId: set-reason
+      effectKind: update_property
+      propertyRef: "#property/reason"
+      valueExpression: input.reason
+      atomicGroup: propose
+    - effectId: set-team
+      effectKind: update_property
+      propertyRef: "#property/responsible-team"
+      valueExpression: input.responsibleTeam
+      atomicGroup: propose
+    - effectId: link-cause
+      effectKind: add_relation
+      targetExpression: logos.seo.relation.countermeasure-addresses-cause
+      atomicGroup: propose
+    - effectId: link-target-site
+      effectKind: add_relation
+      targetExpression: logos.seo.relation.countermeasure-applied-to-site
+      atomicGroup: propose
+    - effectId: link-target-traffic-source
+      effectKind: add_relation
+      targetExpression: logos.seo.relation.countermeasure-applied-to-traffic-source
+      atomicGroup: propose
+    - effectId: link-target-search-query
+      effectKind: add_relation
+      targetExpression: logos.seo.relation.countermeasure-applied-to-search-query
+      atomicGroup: propose
+    - effectId: link-target-page
+      effectKind: add_relation
+      targetExpression: logos.seo.relation.countermeasure-applied-to-page
+      atomicGroup: propose
+  idempotency:
+    keyExpression: concat(action.id, ':', target.id, ':', request.id)
+    scope: target_action
+    retention: P30D
+    onDuplicate: return_original_receipt
+    inputMismatchBehavior: reject
+    inputHashRequired: true
+  concurrency:
+    strategy: optimistic_version
+    tokenExpression: target.version
+    onConflict: reject
+    maxRetries: 0
+  execution:
+    executionMode: internal_atomic
+  failure:
+    failureClasses:
+      - validation
+      - authorization
+      - concurrency
+      - unknown
+    retryableClasses: []
+    compensationMode: manual_recovery
+    unknownResultPolicy: freeze_and_escalate
+  receipt:
+    required: true
+  observation:
+    required: true
+    strategy: read_back_after_commit
+    deadline: PT30S
+  reconciliation:
+    strategy: typed_comparison
+    successCriteria:
+      - target.status == 'PROPOSED'
+    onUnknown: freeze_and_escalate
+  security:
+    classification: internal
+    agentRestrictions:
+      defaultAgentMode: propose_only
+      externalWriteAllowed: false
+  audit:
+    enabled: true
+    eventCategories:
+      - action
+      - property_change
+      - relation_change
+    recordBeforeAfter: true
+    recordInputHash: true
+    recordEvidenceRefs: true
+    recordReleaseRefs: true
+    recordActionChain: true
+    integrityMode: hash_chain
+    retentionPolicyRef: logos.seo.policy.audit-retention

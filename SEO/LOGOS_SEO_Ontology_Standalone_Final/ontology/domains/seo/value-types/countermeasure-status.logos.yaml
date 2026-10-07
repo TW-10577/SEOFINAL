@@ -1,0 +1,67 @@
+apiVersion: logos.ontology/v0.0.1
+kind: ValueType
+metadata:
+  id: logos.seo.value.countermeasure-status
+  apiName: CountermeasureStatus
+  displayName:
+    en: Countermeasure Status
+    ja: 対策ステータス
+  description:
+    en: Governed lifecycle state of a Countermeasure (design §8). The PoC never moves a countermeasure past Proposed on its
+      own.
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+spec:
+  valueKind: vocabulary
+  vocabularyValues:
+    - code: PROPOSED
+      apiName: Proposed
+      displayName:
+        en: Proposed
+        ja: 提案
+      description:
+        en: Created by the system as a suggestion.
+      ordinal: 10
+    - code: APPROVED
+      apiName: Approved
+      displayName:
+        en: Approved
+        ja: 承認
+      description:
+        en: Approved by the SEO team.
+      ordinal: 20
+    - code: IN_PROGRESS
+      apiName: InProgress
+      displayName:
+        en: In Progress
+        ja: 実施中
+      description:
+        en: Being carried out by the assigned team.
+      ordinal: 30
+    - code: COMPLETED
+      apiName: Completed
+      displayName:
+        en: Completed
+        ja: 完了
+      description:
+        en: Carried out.
+      ordinal: 40
+    - code: VERIFIED_EFFECTIVE
+      apiName: VerifiedEffective
+      displayName:
+        en: Verified Effective
+        ja: 効果あり（検証済）
+      description:
+        en: The outcome was verified as effective.
+      ordinal: 50
+    - code: VERIFIED_INEFFECTIVE
+      apiName: VerifiedIneffective
+      displayName:
+        en: Verified Ineffective
+        ja: 効果なし（検証済）
+      description:
+        en: The outcome was verified as not effective.
+      ordinal: 60

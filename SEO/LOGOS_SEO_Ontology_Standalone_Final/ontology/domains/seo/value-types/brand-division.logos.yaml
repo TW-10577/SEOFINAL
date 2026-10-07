@@ -1,0 +1,34 @@
+apiVersion: logos.ontology/v0.0.1
+kind: ValueType
+metadata:
+  id: logos.seo.value.brand-division
+  apiName: BrandDivision
+  displayName:
+    en: Brand Division
+    ja: ブランド区分
+  description:
+    en: Own-brand or generic query. Values to be supplied by the business.
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+spec:
+  valueKind: vocabulary
+  vocabularyValues:
+    - code: OWN_BRAND
+      apiName: OwnBrand
+      displayName:
+        en: Own Brand
+        ja: 自社ブランド
+      description:
+        en: A query naming the own brand.
+      ordinal: 10
+    - code: GENERIC
+      apiName: Generic
+      displayName:
+        en: Generic
+        ja: 一般
+      description:
+        en: A query not naming the own brand.
+      ordinal: 20

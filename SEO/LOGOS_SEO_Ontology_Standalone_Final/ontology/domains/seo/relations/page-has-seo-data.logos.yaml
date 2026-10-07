@@ -1,0 +1,58 @@
+apiVersion: logos.ontology/v0.0.1
+kind: RelationType
+metadata:
+  id: logos.seo.relation.page-has-seo-data
+  apiName: PageHasSEOData
+  displayName:
+    en: Page HAS SEO Data
+    ja: ページ HAS SEO データ
+  description:
+    en: A page holds its metric values.
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+  annotations:
+    logos.ext/design-source: LOGOS_SEO_Ontology_Design.md_.md §7 R2
+spec:
+  accessors:
+    - accessorId: forward
+      fromTypeRef: logos.seo.object.page
+      apiName: seoData
+      displayName:
+        en: SEO Data
+        ja: SEO データ
+      description:
+        en: A page holds its metric values.
+      returnsTypeRef: logos.seo.object.seo-data
+      cardinality: 0..*
+    - accessorId: inverse
+      fromTypeRef: logos.seo.object.seo-data
+      apiName: page
+      displayName:
+        en: Page
+        ja: ページ
+      description:
+        en: A page holds its metric values.
+      returnsTypeRef: logos.seo.object.page
+      cardinality: 0..1
+  canonicalDirection:
+    fromAccessorId: forward
+    toAccessorId: inverse
+  relationMode: stored
+  lifecycle:
+    ownership: reference
+    onFromDelete: restrict
+    onToDelete: restrict
+    orphanPolicy: reject
+  temporal:
+    mode: none
+  security:
+    classification: internal
+  audit:
+    enabled: true
+    eventCategories:
+      - relation_change
+    recordBeforeAfter: true
+    recordReleaseRefs: true

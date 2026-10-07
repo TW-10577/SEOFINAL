@@ -1,0 +1,29 @@
+apiVersion: logos.ontology/v0.0.1
+kind: Policy
+metadata:
+  id: logos.seo.policy.evidence-retention
+  apiName: SEOEvidenceRetention
+  displayName:
+    en: SEO Evidence Retention
+  description:
+    en: "Retention of evidence records: uploaded source rows, model outputs and SEO team decision records."
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+spec:
+  policyKind: retention
+  decisionType: ELIGIBILITY
+  evaluation:
+    evaluationKind: decision_table
+    implementationRef: table:seo/evidence-retention
+    implementationVersion: 0.0.1
+    failureDecision: REQUIRE_REVIEW
+  audit:
+    enabled: true
+    eventCategories:
+      - policy
+    recordReleaseRefs: true
+    integrityMode: hash_chain
+    retentionPolicyRef: logos.seo.policy.audit-retention

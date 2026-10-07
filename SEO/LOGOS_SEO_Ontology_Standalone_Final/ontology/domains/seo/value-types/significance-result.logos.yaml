@@ -1,0 +1,42 @@
+apiVersion: logos.ontology/v0.0.1
+kind: ValueType
+metadata:
+  id: logos.seo.value.significance-result
+  apiName: SignificanceResult
+  displayName:
+    en: Significance Result
+    ja: 判定結果
+  description:
+    en: Result of comparing a change with a judgment condition. Shown as NG / OK / NOT_EVALUABLE in the measurement table.
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+spec:
+  valueKind: vocabulary
+  vocabularyValues:
+    - code: SIGNIFICANT
+      apiName: Significant
+      displayName:
+        en: Significant (NG)
+        ja: 有意（NG）
+      description:
+        en: The change meets the condition; an anomaly is registered.
+      ordinal: 10
+    - code: NOT_SIGNIFICANT
+      apiName: NotSignificant
+      displayName:
+        en: Not significant (OK)
+        ja: 有意でない（OK）
+      description:
+        en: The change does not meet the condition.
+      ordinal: 20
+    - code: NOT_EVALUABLE
+      apiName: NotEvaluable
+      displayName:
+        en: Not evaluable
+        ja: 評価不可
+      description:
+        en: Required data, threshold or unit is missing; never reported as OK.
+      ordinal: 30

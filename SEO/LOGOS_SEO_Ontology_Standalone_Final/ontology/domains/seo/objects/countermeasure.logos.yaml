@@ -1,0 +1,245 @@
+apiVersion: logos.ontology/v0.0.1
+kind: ObjectType
+metadata:
+  id: logos.seo.object.countermeasure
+  apiName: Countermeasure
+  displayName:
+    en: Countermeasure
+    ja: 対策
+  description:
+    en: A suggested SEO or advertising action answering a cause, taken from the client rule's What to Check Next. Created as
+      PROPOSED; the system never moves it further and never executes it.
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+  annotations:
+    logos.ext/design-source: LOGOS_SEO_Ontology_Design.md_.md §6 O10, §8
+spec:
+  semanticKind: business_concept
+  identity:
+    strategy: system_generated
+    primaryPropertyRef: "#property/countermeasure-id"
+  titlePropertyRef: "#property/countermeasure-text"
+  properties:
+    - memberId: countermeasure-id
+      apiName: countermeasureId
+      displayName:
+        en: Countermeasure ID
+        ja: 対策 ID
+      description:
+        en: System-generated identifier.
+      valueTypeRef: logos.seo.value.seo-id
+      valueMode: stored
+      required: true
+      nullable: false
+      immutable: true
+      sensitivity: internal
+      sourceAuthority:
+        authorityKind: internal
+        retainCandidates: true
+        riskLevel: high
+    - memberId: countermeasure-text
+      apiName: countermeasureText
+      displayName:
+        en: Suggested Action
+        ja: 提案アクション
+      description:
+        en: The action, e.g. Provide feedback to the SEO team.
+      valueTypeRef: logos.seo.value.cause-text
+      valueMode: stored
+      required: true
+      nullable: false
+      writableByActionRefs:
+        - logos.seo.action.propose-countermeasure
+      sensitivity: internal
+      sourceAuthority:
+        authorityKind: internal
+        retainCandidates: true
+        riskLevel: medium
+    - memberId: reason
+      apiName: reason
+      displayName:
+        en: Reason
+        ja: 理由
+      description:
+        en: Why this action is suggested, with the numbers.
+      valueTypeRef: logos.seo.value.cause-text
+      valueMode: stored
+      required: true
+      nullable: false
+      writableByActionRefs:
+        - logos.seo.action.propose-countermeasure
+      sensitivity: internal
+      sourceAuthority:
+        authorityKind: internal
+        retainCandidates: true
+        riskLevel: medium
+    - memberId: responsible-team
+      apiName: responsibleTeam
+      displayName:
+        en: Responsible Team
+        ja: 担当チーム
+      description:
+        en: Team the client rule names, e.g. SEO team or advertising team.
+      valueTypeRef: logos.seo.value.seo-string
+      valueMode: stored
+      required: false
+      nullable: true
+      writableByActionRefs:
+        - logos.seo.action.propose-countermeasure
+      sensitivity: internal
+      sourceAuthority:
+        authorityKind: internal
+        retainCandidates: true
+        riskLevel: medium
+    - memberId: status
+      apiName: status
+      displayName:
+        en: Status
+        ja: ステータス
+      description:
+        en: Lifecycle state. Written only by the transition actions.
+      valueTypeRef: logos.seo.value.countermeasure-status
+      valueMode: stored
+      required: true
+      nullable: false
+      writableByActionRefs:
+        - logos.seo.action.approve-countermeasure
+        - logos.seo.action.start-countermeasure
+        - logos.seo.action.complete-countermeasure
+        - logos.seo.action.verify-countermeasure-effective
+        - logos.seo.action.verify-countermeasure-ineffective
+      sensitivity: internal
+      sourceAuthority:
+        authorityKind: internal
+        retainCandidates: true
+        riskLevel: high
+    - memberId: decided-by
+      apiName: decidedBy
+      displayName:
+        en: Decided By
+        ja: 決定者
+      description:
+        en: Name of the SEO team member who approved it, as entered (no Person object in this standalone package).
+      valueTypeRef: logos.seo.value.seo-string
+      valueMode: stored
+      required: false
+      nullable: true
+      writableByActionRefs:
+        - logos.seo.action.approve-countermeasure
+      sensitivity: internal
+      sourceAuthority:
+        authorityKind: internal
+        retainCandidates: true
+        riskLevel: medium
+  lifecycle:
+    statePropertyRef: "#property/status"
+    states:
+      - code: PROPOSED
+        displayName:
+          en: Proposed
+          ja: 提案
+        description:
+          en: Suggested by the system. The initial state.
+        initial: true
+        allowedActionRefs:
+          - logos.seo.action.approve-countermeasure
+      - code: APPROVED
+        displayName:
+          en: Approved
+          ja: 承認
+        description:
+          en: Approved by the SEO team.
+        citable: true
+        allowedActionRefs:
+          - logos.seo.action.start-countermeasure
+      - code: IN_PROGRESS
+        displayName:
+          en: In Progress
+          ja: 実施中
+        description:
+          en: Being carried out by the responsible team (outside the system).
+        citable: true
+        allowedActionRefs:
+          - logos.seo.action.complete-countermeasure
+      - code: COMPLETED
+        displayName:
+          en: Completed
+          ja: 完了
+        description:
+          en: Carried out; awaiting verification.
+        citable: true
+        allowedActionRefs:
+          - logos.seo.action.verify-countermeasure-effective
+          - logos.seo.action.verify-countermeasure-ineffective
+      - code: VERIFIED_EFFECTIVE
+        displayName:
+          en: Verified Effective
+          ja: 効果あり（検証済）
+        description:
+          en: Outcome verified as effective. Terminal.
+        terminal: true
+        citable: true
+      - code: VERIFIED_INEFFECTIVE
+        displayName:
+          en: Verified Ineffective
+          ja: 効果なし（検証済）
+        description:
+          en: Outcome verified as not effective. Terminal.
+        terminal: true
+        citable: true
+    transitions:
+      - transitionId: approve
+        fromState: PROPOSED
+        toState: APPROVED
+        actionRef: logos.seo.action.approve-countermeasure
+      - transitionId: start
+        fromState: APPROVED
+        toState: IN_PROGRESS
+        actionRef: logos.seo.action.start-countermeasure
+      - transitionId: complete
+        fromState: IN_PROGRESS
+        toState: COMPLETED
+        actionRef: logos.seo.action.complete-countermeasure
+      - transitionId: verify-effective
+        fromState: COMPLETED
+        toState: VERIFIED_EFFECTIVE
+        actionRef: logos.seo.action.verify-countermeasure-effective
+      - transitionId: verify-ineffective
+        fromState: COMPLETED
+        toState: VERIFIED_INEFFECTIVE
+        actionRef: logos.seo.action.verify-countermeasure-ineffective
+    deletionMode: archive
+  sourceAuthorityDefault:
+    authorityKind: internal
+    retainCandidates: true
+  temporal:
+    mode: none
+  security:
+    classification: internal
+    tenantScope: organization
+    policyCombining: deny_overrides
+    readPolicyRefs:
+      - logos.seo.policy.internal-reader
+    queryPolicyRefs:
+      - logos.seo.policy.internal-reader
+    executionPolicyRefs:
+      - logos.seo.policy.seo-system-execution
+      - logos.seo.policy.can-review-seo-outcome
+    agentRestrictions:
+      defaultAgentMode: propose_only
+      externalWriteAllowed: false
+  audit:
+    enabled: true
+    eventCategories:
+      - query
+      - property_change
+      - action
+      - lifecycle
+      - evidence
+    recordBeforeAfter: true
+    recordEvidenceRefs: true
+    recordReleaseRefs: true
+    integrityMode: hash_chain

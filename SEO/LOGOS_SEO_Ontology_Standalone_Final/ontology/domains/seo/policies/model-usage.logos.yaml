@@ -1,0 +1,31 @@
+apiVersion: logos.ontology/v0.0.1
+kind: Policy
+metadata:
+  id: logos.seo.policy.model-usage
+  apiName: SEOModelUsage
+  displayName:
+    en: SEO Model Usage
+  description:
+    en: Use of a model to suggest a possible cause. Model output is a hypothesis for SEO team review, never a confirmed
+      cause.
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+spec:
+  policyKind: model_usage
+  decisionType: ALLOW_DENY_REVIEW
+  evaluation:
+    evaluationKind: policy_engine
+    implementationRef: engine:seo/model-usage
+    implementationVersion: 0.0.1
+    failureDecision: REQUIRE_REVIEW
+    timeout: PT5S
+  audit:
+    enabled: true
+    eventCategories:
+      - policy
+    recordReleaseRefs: true
+    integrityMode: hash_chain
+    retentionPolicyRef: logos.seo.policy.audit-retention

@@ -1,0 +1,42 @@
+apiVersion: logos.ontology/v0.0.1
+kind: ValueType
+metadata:
+  id: logos.seo.value.change-direction
+  apiName: ChangeDirection
+  displayName:
+    en: Change Direction
+    ja: 変化の方向
+  description:
+    en: Which direction of change a condition watches.
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+spec:
+  valueKind: vocabulary
+  vocabularyValues:
+    - code: UP
+      apiName: Up
+      displayName:
+        en: Increase
+        ja: 増加
+      description:
+        en: Only increases.
+      ordinal: 10
+    - code: DOWN
+      apiName: Down
+      displayName:
+        en: Decrease
+        ja: 減少
+      description:
+        en: Only decreases.
+      ordinal: 20
+    - code: BOTH
+      apiName: Both
+      displayName:
+        en: Both (±)
+        ja: 両方（±）
+      description:
+        en: Increases and decreases.
+      ordinal: 30

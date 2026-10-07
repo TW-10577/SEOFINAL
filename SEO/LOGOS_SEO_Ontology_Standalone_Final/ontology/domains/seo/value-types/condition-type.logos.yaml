@@ -1,0 +1,34 @@
+apiVersion: logos.ontology/v0.0.1
+kind: ValueType
+metadata:
+  id: logos.seo.value.condition-type
+  apiName: ConditionType
+  displayName:
+    en: Condition Type
+    ja: 条件タイプ
+  description:
+    en: Numeric and mechanical conditions versus complex or ambiguous ones (ECM-05).
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+spec:
+  valueKind: vocabulary
+  vocabularyValues:
+    - code: NUMERIC
+      apiName: Numeric
+      displayName:
+        en: Numeric
+        ja: 数値
+      description:
+        en: A clearly implementable numeric condition.
+      ordinal: 10
+    - code: AMBIGUOUS
+      apiName: Ambiguous
+      displayName:
+        en: Ambiguous
+        ja: 曖昧
+      description:
+        en: A complex or ambiguous condition; needs human review.
+      ordinal: 20

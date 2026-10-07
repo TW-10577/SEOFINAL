@@ -1,0 +1,48 @@
+apiVersion: logos.ontology/v0.0.1
+kind: Function
+metadata:
+  id: logos.seo.function.compute-cvr
+  apiName: ComputeCVR
+  displayName:
+    en: Compute CVR
+    ja: CVR の計算
+  description:
+    en: CVR = conversions ÷ sessions × 100. UNKNOWN when sessions are 0 (division by zero).
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+spec:
+  functionKind: deterministic
+  inputs:
+    - parameterId: conversions
+      apiName: conversions
+      description:
+        en: Conversions (CV).
+      typeRef: logos.seo.value.conversions
+      required: true
+      nullable: false
+    - parameterId: sessions
+      apiName: sessions
+      description:
+        en: Sessions.
+      typeRef: logos.seo.value.sessions
+      required: true
+      nullable: false
+  output:
+    parameterId: cvr
+    apiName: cvr
+    description:
+      en: Conversion rate in percent.
+    typeRef: logos.seo.value.cvr
+    required: false
+    nullable: true
+  implementation:
+    implementationKind: service
+    implementationRef: service:seo/compute-cvr
+    implementationVersion: 0.0.1
+    cachePolicy: request
+  failureMode: return_unknown
+  security:
+    classification: internal

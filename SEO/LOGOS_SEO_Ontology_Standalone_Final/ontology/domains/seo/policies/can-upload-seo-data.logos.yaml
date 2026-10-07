@@ -1,0 +1,32 @@
+apiVersion: logos.ontology/v0.0.1
+kind: Policy
+metadata:
+  id: logos.seo.policy.can-upload-seo-data
+  apiName: CanUploadSEOData
+  displayName:
+    en: SEO Data Upload Authorization
+  description:
+    en: "Who may upload GA4 / Search Console exports: a member of the SEO team. Uploading is not approval of the data;
+      validation still runs."
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+spec:
+  policyKind: authorization
+  decisionType: ALLOW_DENY
+  evaluation:
+    evaluationKind: expression
+    implementationRef: expr:seo/can-upload-seo-data
+    implementationVersion: 0.0.1
+    expression: actor.participantType == 'INTERNAL' and 'seo-team' in actor.roles
+    failureDecision: DENY
+    timeout: PT2S
+  audit:
+    enabled: true
+    eventCategories:
+      - policy
+    recordReleaseRefs: true
+    integrityMode: hash_chain
+    retentionPolicyRef: logos.seo.policy.audit-retention

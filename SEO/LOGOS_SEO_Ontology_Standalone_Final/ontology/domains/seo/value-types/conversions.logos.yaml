@@ -1,0 +1,28 @@
+apiVersion: logos.ontology/v0.0.1
+kind: ValueType
+metadata:
+  id: logos.seo.value.conversions
+  apiName: Conversions
+  displayName:
+    en: Conversions (CV)
+    ja: コンバージョン（CV）
+  description:
+    en: GA4 conversions (CV) in a period. Which GA4 column counts as CV is to be confirmed by the client (e コマース購入数 is used
+      provisionally).
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+spec:
+  valueKind: semantic
+  baseTypeRef: logos.seo.value.seo-integer
+  unit: count
+  constraints:
+    - constraintKind: range
+      parameters:
+        minimum: 0
+      severity: error
+      code: CONVERSIONS_NEGATIVE
+      message:
+        en: Conversions (CV) cannot be negative.

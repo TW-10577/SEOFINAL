@@ -1,0 +1,18 @@
+apiVersion: logos.ontology/v0.0.1
+kind: ValueType
+metadata:
+  id: logos.seo.value.detection-date
+  apiName: DetectionDate
+  displayName:
+    en: Detection Date
+    ja: 検知日
+  description:
+    en: Date the anomaly was detected.
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+spec:
+  valueKind: semantic
+  baseTypeRef: logos.seo.value.seo-date

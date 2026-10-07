@@ -1,0 +1,124 @@
+apiVersion: logos.ontology/v0.0.1
+kind: ObjectType
+metadata:
+  id: logos.seo.object.analysis-period
+  apiName: AnalysisPeriod
+  displayName:
+    en: Analysis Period
+    ja: 分析期間
+  description:
+    en: The period analysed and, through COMPARED_WITH on SEO Data, the period it is compared against. Weekly for the PoC.
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+  annotations:
+    logos.ext/design-source: LOGOS_SEO_Ontology_Design.md_.md §6 O5
+spec:
+  semanticKind: business_concept
+  identity:
+    strategy: system_generated
+    primaryPropertyRef: "#property/period-id"
+  titlePropertyRef: "#property/start-date"
+  properties:
+    - memberId: period-id
+      apiName: periodId
+      displayName:
+        en: Period ID
+        ja: 期間 ID
+      description:
+        en: System-generated identifier.
+      valueTypeRef: logos.seo.value.seo-id
+      valueMode: stored
+      required: true
+      nullable: false
+      immutable: true
+      sensitivity: internal
+      sourceAuthority:
+        authorityKind: internal
+        retainCandidates: true
+        riskLevel: high
+    - memberId: start-date
+      apiName: startDate
+      displayName:
+        en: Start Date
+        ja: 開始日
+      description:
+        en: First day of the period.
+      valueTypeRef: logos.seo.value.seo-date
+      valueMode: stored
+      required: true
+      nullable: false
+      writableByActionRefs:
+        - logos.seo.action.receive-seo-data
+      sensitivity: internal
+      sourceAuthority:
+        authorityKind: internal
+        retainCandidates: true
+        riskLevel: medium
+    - memberId: end-date
+      apiName: endDate
+      displayName:
+        en: End Date
+        ja: 終了日
+      description:
+        en: Last day of the period (inclusive).
+      valueTypeRef: logos.seo.value.seo-date
+      valueMode: stored
+      required: true
+      nullable: false
+      writableByActionRefs:
+        - logos.seo.action.receive-seo-data
+      sensitivity: internal
+      sourceAuthority:
+        authorityKind: internal
+        retainCandidates: true
+        riskLevel: medium
+    - memberId: granularity
+      apiName: granularity
+      displayName:
+        en: Granularity
+        ja: 粒度
+      description:
+        en: Daily, weekly, or one total for the whole export.
+      valueTypeRef: logos.seo.value.period-granularity
+      valueMode: stored
+      required: true
+      nullable: false
+      writableByActionRefs:
+        - logos.seo.action.receive-seo-data
+      sensitivity: internal
+      sourceAuthority:
+        authorityKind: internal
+        retainCandidates: true
+        riskLevel: medium
+  sourceAuthorityDefault:
+    authorityKind: internal
+    retainCandidates: true
+  temporal:
+    mode: none
+  security:
+    classification: internal
+    tenantScope: organization
+    policyCombining: deny_overrides
+    readPolicyRefs:
+      - logos.seo.policy.internal-reader
+    queryPolicyRefs:
+      - logos.seo.policy.internal-reader
+    executionPolicyRefs:
+      - logos.seo.policy.seo-system-execution
+    agentRestrictions:
+      defaultAgentMode: propose_only
+      externalWriteAllowed: false
+  audit:
+    enabled: true
+    eventCategories:
+      - query
+      - property_change
+      - action
+      - evidence
+    recordBeforeAfter: true
+    recordEvidenceRefs: true
+    recordReleaseRefs: true
+    integrityMode: hash_chain

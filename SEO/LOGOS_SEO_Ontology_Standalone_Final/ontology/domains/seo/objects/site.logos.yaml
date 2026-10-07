@@ -1,0 +1,96 @@
+apiVersion: logos.ontology/v0.0.1
+kind: ObjectType
+metadata:
+  id: logos.seo.object.site
+  apiName: Site
+  displayName:
+    en: Site
+    ja: サイト
+  description:
+    en: The monitored e-commerce site as a whole — the GA4 total segment (通販（全体）) that client rules ① and ② judge. Added
+      because the anomaly subject must be able to be the site, not only a query or page.
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+  annotations:
+    logos.ext/design-source: LOGOS_SEO_Ontology_Design.md_.md §6 (extension for SEO.txt rules ① ②; design open item B4)
+    logos.ext/confirmation-status: unconfirmed
+    logos.ext/unconfirmed-item: GA4 segment 通販（全体） as the site total
+spec:
+  semanticKind: business_concept
+  identity:
+    strategy: source_bound
+    primaryPropertyRef: "#property/site-key"
+  titlePropertyRef: "#property/site-key"
+  properties:
+    - memberId: site-key
+      apiName: siteKey
+      displayName:
+        en: Site Key
+        ja: サイトキー
+      description:
+        en: The GA4 segment name that represents the whole site, as exported (e.g. 通販（全体）). Which segment is the site total is
+          to be confirmed by the client.
+      valueTypeRef: logos.seo.value.seo-string
+      valueMode: stored
+      required: true
+      nullable: false
+      immutable: true
+      sensitivity: internal
+      sourceBindingRefs:
+        - logos.seo.binding.ga4-csv
+      sourceAuthority:
+        authorityKind: external
+        primarySourceRef: file:ga4-csv
+        retainCandidates: true
+        riskLevel: high
+    - memberId: site-name
+      apiName: siteName
+      displayName:
+        en: Site Name
+        ja: サイト名
+      description:
+        en: Human-readable site name, e.g. www.dospara.co.jp.
+      valueTypeRef: logos.seo.value.seo-string
+      valueMode: stored
+      required: false
+      nullable: true
+      writableByActionRefs:
+        - logos.seo.action.receive-seo-data
+      sensitivity: internal
+      sourceAuthority:
+        authorityKind: internal
+        retainCandidates: true
+        riskLevel: medium
+  sourceAuthorityDefault:
+    authorityKind: external
+    primarySourceRef: file:ga4-csv
+    retainCandidates: true
+  temporal:
+    mode: none
+  security:
+    classification: internal
+    tenantScope: organization
+    policyCombining: deny_overrides
+    readPolicyRefs:
+      - logos.seo.policy.internal-reader
+    queryPolicyRefs:
+      - logos.seo.policy.internal-reader
+    executionPolicyRefs:
+      - logos.seo.policy.seo-system-execution
+    agentRestrictions:
+      defaultAgentMode: propose_only
+      externalWriteAllowed: false
+  audit:
+    enabled: true
+    eventCategories:
+      - query
+      - property_change
+      - action
+      - evidence
+    recordBeforeAfter: true
+    recordEvidenceRefs: true
+    recordReleaseRefs: true
+    integrityMode: hash_chain

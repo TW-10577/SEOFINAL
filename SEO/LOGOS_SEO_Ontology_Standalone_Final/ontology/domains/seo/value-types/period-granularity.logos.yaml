@@ -1,0 +1,42 @@
+apiVersion: logos.ontology/v0.0.1
+kind: ValueType
+metadata:
+  id: logos.seo.value.period-granularity
+  apiName: PeriodGranularity
+  displayName:
+    en: Period Granularity
+    ja: 期間の粒度
+  description:
+    en: Granularity of an analysis period.
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+spec:
+  valueKind: vocabulary
+  vocabularyValues:
+    - code: DAILY
+      apiName: Daily
+      displayName:
+        en: Daily
+        ja: 日次
+      description:
+        en: One day.
+      ordinal: 10
+    - code: WEEKLY
+      apiName: Weekly
+      displayName:
+        en: Weekly
+        ja: 週次
+      description:
+        en: Seven days; the PoC comparison unit.
+      ordinal: 20
+    - code: EXPORT_TOTAL
+      apiName: ExportTotal
+      displayName:
+        en: Export total
+        ja: エクスポート合計
+      description:
+        en: One total for the whole export period (e.g. Search Console 3-month totals); cannot be compared week on week.
+      ordinal: 30

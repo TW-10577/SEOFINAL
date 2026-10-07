@@ -1,0 +1,58 @@
+apiVersion: logos.ontology/v0.0.1
+kind: RelationType
+metadata:
+  id: logos.seo.relation.cause-explains-anomaly
+  apiName: CauseExplainsAnomaly
+  displayName:
+    en: Cause Hypothesis EXPLAINS SEO Anomaly
+    ja: 原因仮説 EXPLAINS SEO 異常
+  description:
+    en: A possible reason for the anomaly.
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+  annotations:
+    logos.ext/design-source: LOGOS_SEO_Ontology_Design.md_.md §7 R11
+spec:
+  accessors:
+    - accessorId: forward
+      fromTypeRef: logos.seo.object.cause-hypothesis
+      apiName: anomaly
+      displayName:
+        en: SEO Anomaly
+        ja: SEO 異常
+      description:
+        en: A possible reason for the anomaly.
+      returnsTypeRef: logos.seo.object.seo-anomaly
+      cardinality: "1"
+    - accessorId: inverse
+      fromTypeRef: logos.seo.object.seo-anomaly
+      apiName: causeHypotheses
+      displayName:
+        en: Cause Hypotheses
+        ja: 原因仮説
+      description:
+        en: A possible reason for the anomaly.
+      returnsTypeRef: logos.seo.object.cause-hypothesis
+      cardinality: 0..*
+  canonicalDirection:
+    fromAccessorId: forward
+    toAccessorId: inverse
+  relationMode: stored
+  lifecycle:
+    ownership: aggregation
+    onFromDelete: restrict
+    onToDelete: restrict
+    orphanPolicy: reject
+  temporal:
+    mode: none
+  security:
+    classification: internal
+  audit:
+    enabled: true
+    eventCategories:
+      - relation_change
+    recordBeforeAfter: true
+    recordReleaseRefs: true

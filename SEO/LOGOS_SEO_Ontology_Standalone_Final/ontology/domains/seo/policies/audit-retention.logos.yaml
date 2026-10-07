@@ -1,0 +1,30 @@
+apiVersion: logos.ontology/v0.0.1
+kind: Policy
+metadata:
+  id: logos.seo.policy.audit-retention
+  apiName: SEOAuditRetention
+  displayName:
+    en: SEO Audit Retention
+  description:
+    en: Retention of audit records for SEO actions and policy decisions. Period follows the organisation default; to be
+      confirmed by the SEO team.
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+spec:
+  policyKind: retention
+  decisionType: ELIGIBILITY
+  evaluation:
+    evaluationKind: decision_table
+    implementationRef: table:seo/audit-retention
+    implementationVersion: 0.0.1
+    failureDecision: REQUIRE_REVIEW
+  audit:
+    enabled: true
+    eventCategories:
+      - policy
+    recordReleaseRefs: true
+    integrityMode: hash_chain
+    retentionPolicyRef: logos.seo.policy.audit-retention

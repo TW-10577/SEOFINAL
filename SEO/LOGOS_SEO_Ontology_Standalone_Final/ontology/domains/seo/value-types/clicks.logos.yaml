@@ -1,0 +1,27 @@
+apiVersion: logos.ontology/v0.0.1
+kind: ValueType
+metadata:
+  id: logos.seo.value.clicks
+  apiName: Clicks
+  displayName:
+    en: Clicks
+    ja: クリック数
+  description:
+    en: Search Console clicks in a period (count).
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+spec:
+  valueKind: semantic
+  baseTypeRef: logos.seo.value.seo-integer
+  unit: count
+  constraints:
+    - constraintKind: range
+      parameters:
+        minimum: 0
+      severity: error
+      code: CLICKS_NEGATIVE
+      message:
+        en: Clicks cannot be negative.

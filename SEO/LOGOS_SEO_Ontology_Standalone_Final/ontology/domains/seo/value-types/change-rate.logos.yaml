@@ -1,0 +1,20 @@
+apiVersion: logos.ontology/v0.0.1
+kind: ValueType
+metadata:
+  id: logos.seo.value.change-rate
+  apiName: ChangeRate
+  displayName:
+    en: Change Rate
+    ja: 変化率
+  description:
+    en: (Current − previous) ÷ previous × 100, week on week. Undefined (NULL) when the previous value is 0. A calculated
+      value.
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+spec:
+  valueKind: semantic
+  baseTypeRef: logos.seo.value.seo-decimal
+  unit: percent

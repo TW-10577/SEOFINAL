@@ -1,0 +1,28 @@
+apiVersion: logos.ontology/v0.0.1
+kind: ValueType
+metadata:
+  id: logos.seo.value.cvr
+  apiName: CVR
+  displayName:
+    en: CVR
+    ja: CVR
+  description:
+    en: Conversion rate, CV ÷ sessions × 100.
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+spec:
+  valueKind: semantic
+  baseTypeRef: logos.seo.value.seo-decimal
+  unit: percent
+  constraints:
+    - constraintKind: range
+      parameters:
+        minimum: 0
+        maximum: 100
+      severity: error
+      code: CVR_RANGE
+      message:
+        en: CVR must be between 0 and 100 percent.

@@ -1,0 +1,50 @@
+apiVersion: logos.ontology/v0.0.1
+kind: ValueType
+metadata:
+  id: logos.seo.value.traffic-channel
+  apiName: TrafficChannel
+  displayName:
+    en: Traffic Channel Group
+    ja: 流入チャネル
+  description:
+    en: GA4 channel grouping (design §9).
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+spec:
+  valueKind: vocabulary
+  vocabularyValues:
+    - code: ORGANIC
+      apiName: Organic
+      displayName:
+        en: Organic
+        ja: オーガニック
+      description:
+        en: Organic search.
+      ordinal: 10
+    - code: PAID
+      apiName: Paid
+      displayName:
+        en: Paid / Advertising
+        ja: 広告
+      description:
+        en: Paid channels combined (client rule ① "advertising traffic").
+      ordinal: 20
+    - code: DISPLAY
+      apiName: Display
+      displayName:
+        en: Display
+        ja: ディスプレイ
+      description:
+        en: Display advertising.
+      ordinal: 30
+    - code: OTHER
+      apiName: Other
+      displayName:
+        en: Other
+        ja: その他
+      description:
+        en: Any other channel, e.g. direct.
+      ordinal: 40

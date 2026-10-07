@@ -1,0 +1,18 @@
+apiVersion: logos.ontology/v0.0.1
+kind: ValueType
+metadata:
+  id: logos.seo.value.page-url
+  apiName: PageURL
+  displayName:
+    en: Page URL
+    ja: ページ URL
+  description:
+    en: Full URL of a monitored page.
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+spec:
+  valueKind: primitive
+  primitive: uri

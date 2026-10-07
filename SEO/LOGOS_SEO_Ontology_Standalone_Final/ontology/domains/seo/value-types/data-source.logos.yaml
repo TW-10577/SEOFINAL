@@ -1,0 +1,34 @@
+apiVersion: logos.ontology/v0.0.1
+kind: ValueType
+metadata:
+  id: logos.seo.value.data-source
+  apiName: DataSource
+  displayName:
+    en: Data Source
+    ja: データソース
+  description:
+    en: Where an SEO Data value came from.
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+spec:
+  valueKind: vocabulary
+  vocabularyValues:
+    - code: GA4
+      apiName: GA4
+      displayName:
+        en: Google Analytics 4
+        ja: Google アナリティクス 4
+      description:
+        en: GA4 Explorations export.
+      ordinal: 10
+    - code: GSC
+      apiName: GSC
+      displayName:
+        en: Google Search Console
+        ja: Google Search Console
+      description:
+        en: Search Console Performance export.
+      ordinal: 20

@@ -1,0 +1,34 @@
+apiVersion: logos.ontology/v0.0.1
+kind: DomainDefinition
+metadata:
+  id: logos.seo.domain.seo
+  apiName: SEOPagePerformanceAnalysisDomain
+  displayName:
+    en: SEO Page Performance Analysis Domain
+    ja: SEO ページパフォーマンス分析ドメイン
+  description:
+    en: "Governance boundary for SEO page performance: how performance changes over time, how a significant change is
+      detected against business judgment conditions, how an anomaly is explained, and how a countermeasure is proposed.
+      The system suggests; the SEO team decides."
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+  annotations:
+    logos.ext/design-source: LOGOS_SEO_Ontology_Design.md_.md; LOGOS_SEO_Workflow_Design.md
+spec:
+  namespace: seo
+  domainKind: business
+  businessScope:
+    en: "In scope: CSV/Excel ingestion of GA4 and Search Console exports, validation and standardization, week-on-week
+      comparison, significant-change detection against SEO-team-approved judgment conditions, SEO anomaly registration,
+      possible-cause suggestion, countermeasure proposal, dashboard/report generation and weekly monitoring. Out of
+      scope: direct GA4 / Search Console API connections, competitor crawling and scoring, automatic website updates,
+      automatic countermeasure execution and a full action workbench."
+  security:
+    classification: internal
+    policyCombining: deny_overrides
+    agentRestrictions:
+      defaultAgentMode: propose_only
+      externalWriteAllowed: false

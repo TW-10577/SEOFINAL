@@ -1,0 +1,26 @@
+apiVersion: logos.ontology/v0.0.1
+kind: OntologyPackage
+metadata:
+  id: logos.seo.package.seo
+  apiName: SEOPagePerformanceAnalysis
+  displayName:
+    en: SEO Page Performance Analysis
+    ja: SEO ページパフォーマンス分析
+  description:
+    en: Standalone ontology package for SEO page performance analysis. Semantics come from the SEO Ontology Design and
+      Workflow Design; the judgment conditions are the client rules in SEO.txt. No dependency on shared-core or other
+      domains.
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+spec:
+  packageKind: domain
+  namespace: seo
+  defaultLocale: en
+  requiredLocales:
+    - en
+  validationProfileRefs: []
+  dependencies: []
+  exports: []

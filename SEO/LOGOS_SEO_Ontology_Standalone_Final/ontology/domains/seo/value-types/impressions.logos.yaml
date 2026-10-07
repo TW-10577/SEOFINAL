@@ -1,0 +1,27 @@
+apiVersion: logos.ontology/v0.0.1
+kind: ValueType
+metadata:
+  id: logos.seo.value.impressions
+  apiName: Impressions
+  displayName:
+    en: Impressions
+    ja: 表示回数
+  description:
+    en: Search Console impressions in a period (count).
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+spec:
+  valueKind: semantic
+  baseTypeRef: logos.seo.value.seo-integer
+  unit: count
+  constraints:
+    - constraintKind: range
+      parameters:
+        minimum: 0
+      severity: error
+      code: IMPRESSIONS_NEGATIVE
+      message:
+        en: Impressions cannot be negative.

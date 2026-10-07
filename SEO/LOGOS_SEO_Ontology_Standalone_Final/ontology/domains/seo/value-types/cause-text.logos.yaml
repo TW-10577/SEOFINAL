@@ -1,0 +1,18 @@
+apiVersion: logos.ontology/v0.0.1
+kind: ValueType
+metadata:
+  id: logos.seo.value.cause-text
+  apiName: CauseText
+  displayName:
+    en: Cause Text
+    ja: 原因テキスト
+  description:
+    en: Generated cause or comment text, reviewed by the SEO team.
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+spec:
+  valueKind: semantic
+  baseTypeRef: logos.seo.value.seo-text

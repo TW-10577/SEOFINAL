@@ -1,0 +1,67 @@
+# Loaded at startup by SEO/seo-api; checked against the API code.
+apiVersion: logos.ontology/v0.0.1
+kind: RelationType
+metadata:
+  id: logos.seo.relation.countermeasure-addresses-cause
+  apiName: CountermeasureAddressesCause
+  displayName:
+    en: Countermeasure addresses cause hypothesis
+    ja: 対策が原因仮説に対応
+  description:
+    en: Countermeasure addresses cause hypothesis (R12).
+    ja: 対策が原因仮説に対応（R12）。
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-platform
+    ownerType: team
+  visibility: package
+  annotations:
+    logos.ext/source-namespace: logos.seo
+    logos.ext/consumed-by: SEO/seo-api (src/ontology.ts)
+    logos.ext/design-source: LOGOS_SEO_Ontology_Design.md_.md §7 R12
+    logos.ext/locale-status: Japanese labels are a draft; business terms to be confirmed by the SEO team
+spec:
+  accessors:
+  - accessorId: from
+    fromTypeRef: logos.seo.object.countermeasure
+    apiName: causeHypothesis
+    displayName:
+      en: Cause Hypothesis
+      ja: 原因仮説
+    description:
+      en: The cause hypothesis this countermeasure answers. Exactly one (countermeasure.causeId).
+      ja: この対策が対応する原因仮説。必ず1件（countermeasure.causeId）。
+    returnsTypeRef: logos.seo.object.cause-hypothesis
+    cardinality: '1'
+  - accessorId: to
+    fromTypeRef: logos.seo.object.cause-hypothesis
+    apiName: countermeasures
+    displayName:
+      en: Countermeasures
+      ja: 対策
+    description:
+      en: Countermeasures proposed for the cause. The rules propose one; more may be added later.
+      ja: 原因に対して提案された対策。ルールは1件を提案し、後から追加される場合がある。
+    returnsTypeRef: logos.seo.object.countermeasure
+    cardinality: '0..*'
+  canonicalDirection:
+    fromAccessorId: from
+    toAccessorId: to
+  relationMode: stored
+  security:
+    classification: internal
+    policyCombining: deny_overrides
+    readPolicyRefs:
+    - logos.shared-core.policy.authenticated-internal-reader
+    queryPolicyRefs:
+    - logos.shared-core.policy.authenticated-internal-reader
+    agentRestrictions:
+      defaultAgentMode: propose_only
+      externalWriteAllowed: false
+  audit:
+    enabled: true
+    eventCategories:
+    - relation_change
+    recordReleaseRefs: true
+    integrityMode: hash_chain
+    retentionPolicyRef: logos.shared-core.policy.audit-retention-7y

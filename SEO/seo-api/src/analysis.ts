@@ -1,15 +1,15 @@
-import type { ChangeKind, Comparison, ParsedFile, Period, Threshold, WeeklyTrendRow } from './types.ts'
+import type { ChangeKind, Comparison, JudgmentCondition, ParsedFile, Period, WeeklyTrendRow } from './types.ts'
 
 const DAY_MS = 86_400_000
 
-// Every key here must be configured in config/thresholds.yaml with the same kind.
-export const THRESHOLD_KINDS: Record<string, ChangeKind> = {
-  sessions: 'relative',
-  cvr: 'points',
-  clicks: 'relative',
-  impressions: 'relative',
-  ctr: 'points',
-  position: 'rank',
+// Metrics a judgment condition may watch, with the unit the analysis measures them in.
+export const CONDITION_METRICS: Record<string, ChangeKind[]> = {
+  sessions: ['relative'],
+  cvr: ['points', 'relative'],
+  clicks: ['relative'],
+  impressions: ['relative'],
+  ctr: ['points', 'relative'],
+  position: ['rank', 'relative'],
 }
 
 export function addDays(date: string, n: number): string {
@@ -23,7 +23,7 @@ interface MetricDef {
   label: string
   scope: string
   kind: ChangeKind
-  threshold?: string
+  conditionKey?: string
   value: (s: Sum) => number
 }
 
@@ -33,18 +33,18 @@ function metricsFor(parsed: ParsedFile): MetricDef[] {
   if (parsed.source === 'gsc-daily') {
     const scope = 'Site (GSC)'
     return [
-      { key: 'clicks', label: 'Clicks', scope, kind: 'relative', threshold: 'clicks', value: (s) => s('clicks') },
-      { key: 'impressions', label: 'Impressions', scope, kind: 'relative', threshold: 'impressions', value: (s) => s('impressions') },
-      { key: 'ctr', label: 'CTR', scope, kind: 'points', threshold: 'ctr', value: (s) => ratio(s('clicks'), s('impressions')) * 100 },
-      { key: 'position', label: 'Average position', scope, kind: 'rank', threshold: 'position', value: (s) => ratio(s('positionWeighted'), s('impressions')) },
+      { key: 'clicks', label: 'Clicks', scope, kind: 'relative', conditionKey: 'clicks', value: (s) => s('clicks') },
+      { key: 'impressions', label: 'Impressions', scope, kind: 'relative', conditionKey: 'impressions', value: (s) => s('impressions') },
+      { key: 'ctr', label: 'CTR', scope, kind: 'points', conditionKey: 'ctr', value: (s) => ratio(s('clicks'), s('impressions')) * 100 },
+      { key: 'position', label: 'Average position', scope, kind: 'rank', conditionKey: 'position', value: (s) => ratio(s('positionWeighted'), s('impressions')) },
     ]
   }
   if (parsed.source === 'ga4-daily' && parsed.segments) {
     const seg = parsed.segments
     const list: MetricDef[] = [
-      { key: 'sessions', label: 'Sessions', scope: seg.total, kind: 'relative', threshold: 'sessions', value: (s) => s('total:sessions') },
+      { key: 'sessions', label: 'Sessions', scope: seg.total, kind: 'relative', conditionKey: 'sessions', value: (s) => s('total:sessions') },
       { key: 'purchases', label: 'Purchases', scope: seg.total, kind: 'relative', value: (s) => s('total:purchases') },
-      { key: 'cvr', label: 'CVR', scope: seg.total, kind: 'points', threshold: 'cvr', value: (s) => ratio(s('total:purchases'), s('total:sessions')) * 100 },
+      { key: 'cvr', label: 'CVR', scope: seg.total, kind: 'points', conditionKey: 'cvr', value: (s) => ratio(s('total:purchases'), s('total:sessions')) * 100 },
     ]
     for (const role of ['organic', 'paid', 'direct'] as const) {
       const scope = seg[role]
@@ -77,14 +77,18 @@ export function dataPeriod(parsed: ParsedFile): Period | null {
   return dates.length ? { start: dates[0], end: dates[dates.length - 1] } : null
 }
 
-function isSignificant(kind: ChangeKind, absoluteChange: number, changePercentage: number | null, t: Threshold): boolean {
-  if (kind === 'relative') return changePercentage !== null && Math.abs(changePercentage) >= t.value
-  return Math.abs(absoluteChange) >= t.value
+// Only numeric conditions are evaluated automatically; ambiguous ones need a person (design §9).
+function isSignificant(absoluteChange: number, changePercentage: number | null, c: JudgmentCondition): boolean {
+  if (c.conditionType !== 'numeric') return false
+  if (c.direction === 'increase' && absoluteChange <= 0) return false
+  if (c.direction === 'decrease' && absoluteChange >= 0) return false
+  if (c.unit === 'relative') return changePercentage !== null && Math.abs(changePercentage) >= c.threshold
+  return Math.abs(absoluteChange) >= c.threshold
 }
 
 export function compareLatestWeeks(
   parsed: ParsedFile,
-  thresholds: Record<string, Threshold>,
+  conditions: JudgmentCondition[],
 ): { comparisons: Comparison[]; warning?: string } {
   const period = dataPeriod(parsed)
   const daily = parsed.daily
@@ -98,6 +102,12 @@ export function compareLatestWeeks(
   }
   const currentPeriod = { start: addDays(period.end, -6), end: period.end }
   const previousPeriod = { start: addDays(period.end, -13), end: addDays(period.end, -7) }
+  return { comparisons: comparePeriods(parsed, previousPeriod, currentPeriod, conditions) }
+}
+
+// Compare two given periods of one file. Metrics with a missing day in either period are left out.
+export function comparePeriods(parsed: ParsedFile, previousPeriod: Period, currentPeriod: Period, conditions: JudgmentCondition[]): Comparison[] {
+  const daily = parsed.daily ?? {}
   const cur = summer(daily, currentPeriod)
   const prev = summer(daily, previousPeriod)
 
@@ -108,7 +118,7 @@ export function compareLatestWeeks(
     if (!Number.isFinite(previous) || !Number.isFinite(current)) continue
     const absoluteChange = current - previous
     const changePercentage = previous === 0 ? null : (absoluteChange / Math.abs(previous)) * 100
-    const threshold = m.threshold ? (thresholds[m.threshold] ?? null) : null
+    const condition = m.conditionKey ? (conditions.find((c) => c.metricKey === m.conditionKey) ?? null) : null
     comparisons.push({
       metricKey: m.key,
       label: m.label,
@@ -118,20 +128,21 @@ export function compareLatestWeeks(
       current,
       absoluteChange,
       changePercentage,
-      threshold,
-      significant: threshold ? isSignificant(m.kind, absoluteChange, changePercentage, threshold) : false,
+      threshold: condition ? { kind: condition.unit, value: condition.threshold, confirmed: condition.confirmed, source: condition.source } : null,
+      judgmentConditionId: condition?.conditionId ?? null,
+      significant: condition ? isSignificant(absoluteChange, changePercentage, condition) : false,
       previousPeriod,
       currentPeriod,
     })
   }
-  return { comparisons }
+  return comparisons
 }
 
 export function weeklyTrend(parsed: ParsedFile, maxWeeks = 12): WeeklyTrendRow[] {
   const period = dataPeriod(parsed)
   const daily = parsed.daily
   if (!period || !daily) return []
-  const metrics = metricsFor(parsed).filter((m) => m.threshold)
+  const metrics = metricsFor(parsed).filter((m) => m.conditionKey)
   const rows: WeeklyTrendRow[] = []
   for (let end = period.end; rows.length < maxWeeks && hasFullDays(daily, end, 7); end = addDays(end, -7)) {
     const week = { start: addDays(end, -6), end }

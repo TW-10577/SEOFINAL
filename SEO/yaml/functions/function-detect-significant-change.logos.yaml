@@ -1,4 +1,4 @@
-# Loaded at startup by SEO/seo-api; every valueTypeRef must resolve.
+# Loaded at startup by SEO/seo-api; checked against the API code.
 apiVersion: logos.ontology/v0.0.1
 kind: Function
 metadata:
@@ -8,8 +8,8 @@ metadata:
     en: Detect Significant Change
     ja: 重要な変化を検出
   description:
-    en: Compares the latest week with the previous week and decides whether the change crosses the threshold from config/thresholds.yaml.
-    ja: 最新週と前週を比較し、config/thresholds.yamlの閾値を超えたかを判定する。
+    en: Compares the latest week with the previous week and evaluates the judgment condition for the metric.
+    ja: 最新週と前週を比較し、その指標の判断条件を評価する。
   version: 0.0.1
   owner:
     ownerId: team:logos-platform
@@ -18,8 +18,9 @@ metadata:
   annotations:
     logos.ext/source-namespace: logos.seo
     logos.ext/consumed-by: SEO/seo-api (src/ontology.ts)
+    logos.ext/design-source: LOGOS_SEO_Ontology_Design.md_.md §5.1
+    logos.ext/locale-status: Japanese labels are a draft; business terms to be confirmed by the SEO team
     logos.ext/implementation: seo-api/src/analysis.ts compareLatestWeeks
-    logos.ext/source-function-id: SEO-F2
 spec:
   input:
     parameters:
@@ -29,13 +30,6 @@ spec:
         en: Metric Key
         ja: 指標キー
       valueTypeRef: logos.shared-core.value.short-text
-      required: true
-    - parameterId: kind
-      apiName: kind
-      displayName:
-        en: Change Kind
-        ja: 変化の種類
-      valueTypeRef: logos.seo.value.change-kind
       required: true
     - parameterId: previous-value
       apiName: previousValue
@@ -51,12 +45,12 @@ spec:
         ja: 最新週値
       valueTypeRef: logos.shared-core.value.number
       required: true
-    - parameterId: threshold
-      apiName: threshold
+    - parameterId: condition
+      apiName: condition
       displayName:
-        en: Threshold
-        ja: 閾値
-      valueTypeRef: logos.seo.value.threshold
+        en: Judgment Condition
+        ja: 判断条件
+      valueTypeRef: logos.seo.object.judgment-condition
       required: true
   output:
     parameters:
@@ -70,7 +64,7 @@ spec:
     - parameterId: change-percentage
       apiName: changePercentage
       displayName:
-        en: Change Percentage
+        en: Change Rate
         ja: 変化率
       valueTypeRef: logos.seo.value.signed-percentage
       required: false

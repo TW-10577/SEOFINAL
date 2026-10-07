@@ -1,0 +1,70 @@
+# Loaded at startup by SEO/seo-api; checked against the API code.
+apiVersion: logos.ontology/v0.0.1
+kind: ValueType
+metadata:
+  id: logos.seo.value.countermeasure-status
+  apiName: CountermeasureStatus
+  displayName:
+    en: Countermeasure Status
+    ja: 対策ステータス
+  description:
+    en: Governed lifecycle of a countermeasure. The system creates it as Proposed; the SEO team approves, runs and verifies
+      it. Dismissed comes from A8/H2 ("approve, adjust or dismiss").
+    ja: 対策のライフサイクル。システムがProposedで作成し、SEO担当が承認・実行・検証する。
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-platform
+    ownerType: team
+  visibility: package
+  annotations:
+    logos.ext/source-namespace: logos.seo
+    logos.ext/consumed-by: SEO/seo-api (src/ontology.ts)
+    logos.ext/design-source: LOGOS_SEO_Ontology_Design.md_.md §8, §5 A8
+    logos.ext/locale-status: Japanese labels are a draft; business terms to be confirmed by the SEO team
+spec:
+  valueKind: enumerated_text
+  enumeratedValues:
+  - value: Proposed
+    displayName:
+      en: Proposed
+      ja: 提案
+  - value: Approved
+    displayName:
+      en: Approved
+      ja: 承認
+  - value: InProgress
+    displayName:
+      en: In progress
+      ja: 実施中
+  - value: Completed
+    displayName:
+      en: Completed
+      ja: 完了
+  - value: VerifiedEffective
+    displayName:
+      en: Verified effective
+      ja: 効果あり
+  - value: VerifiedIneffective
+    displayName:
+      en: Verified ineffective
+      ja: 効果なし
+  - value: Dismissed
+    displayName:
+      en: Dismissed
+      ja: 却下
+  initialValue: Proposed
+  transitions:
+    Proposed:
+    - Approved
+    - Dismissed
+    Approved:
+    - InProgress
+    - Dismissed
+    InProgress:
+    - Completed
+    Completed:
+    - VerifiedEffective
+    - VerifiedIneffective
+    VerifiedEffective: []
+    VerifiedIneffective: []
+    Dismissed: []

@@ -4,11 +4,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, it } from 'node:test'
 import { fileURLToPath } from 'node:url'
+import { SeoDatabase } from '../src/db.ts'
 import { loadOntology } from '../src/ontology.ts'
 import { SeoService } from '../src/service.ts'
-import { SeoDatabase } from '../src/db.ts'
 
 const SEO_DIR = fileURLToPath(new URL('../../', import.meta.url))
+const CONDITIONS = 'config/judgment-conditions.yaml'
+const service = (dir = SEO_DIR) => new SeoService(new SeoDatabase(':memory:'), loadOntology(dir))
 
 function copyOntology(edit: (dir: string) => void): string {
   const dir = mkdtempSync(join(tmpdir(), 'seo-ontology-'))
@@ -25,67 +27,71 @@ function replaceIn(file: string, from: string, to: string) {
 
 function ga4Csv(totals: [number, number][]) {
   const day = (i: number) => new Date(Date.parse('2026-08-01T00:00:00Z') + i * 86_400_000).toISOString().slice(0, 10)
-  return [
-    'セグメント,通販（全体）,通販（全体）',
-    '日付,セッション,e コマース購入数',
-    ...totals.map(([s, p], i) => `${day(i)},${s},${p}`),
-  ].join('\n')
+  return ['セグメント,通販（全体）,通販（全体）', '日付,セッション,e コマース購入数', ...totals.map(([s, p], i) => `${day(i)},${s},${p}`)].join('\n')
 }
+const weeks = (a: [number, number], b: [number, number]) => [...Array(7).fill(a), ...Array(7).fill(b)] as [number, number][]
 
 describe('SEO ontology', () => {
-  it('loads the YAML in the SEO folder and agrees with the API code', () => {
-    const ontology = loadOntology(SEO_DIR)
-    const summary = ontology.summary()
-    assert.deepEqual(summary.objects.map((o) => o.apiName).sort(), ['Countermeasure', 'SEOAnomaly'])
-    assert.deepEqual(summary.relations, ['logos.seo.relation.anomaly-has-countermeasure'])
-    assert.equal(summary.functions.length, 2)
-    assert.equal(ontology.thresholds.sessions.value, 3.9)
-    assert.doesNotThrow(() => new SeoService(new SeoDatabase(':memory:'), ontology))
+  it('loads the design-doc model and agrees with the API code', () => {
+    const o = loadOntology(SEO_DIR).summary()
+    assert.deepEqual(o.objects.map((x) => x.apiName).sort(), ['CauseHypothesis', 'Countermeasure', 'JudgmentCondition', 'SEOAnomaly'])
+    assert.equal(o.relations.length, 3)
+    assert.equal(o.functions.length, 2)
+    assert.equal(o.conditions.find((c) => c.metricKey === 'sessions')?.threshold, 3.9)
+    assert.deepEqual(o.lifecycles['logos.seo.value.anomaly-status'].transitions.Detected, ['Triaged'])
+    assert.doesNotThrow(() => service())
   })
 
   it('refuses to start when a status enum drifts from the code', () => {
-    const dir = copyOntology((d) => replaceIn(join(d, 'value-types/value-type-anomaly-status.logos.yaml'), 'value: Resolved', 'value: Closed'))
-    assert.throws(() => new SeoService(new SeoDatabase(':memory:'), loadOntology(dir)), /anomaly-status.*Missing in YAML: Resolved.*Not handled by code: Closed/)
-  })
-
-  it('refuses an invalid threshold config', () => {
-    const bad = copyOntology((d) => replaceIn(join(d, 'config/thresholds.yaml'), 'kind: rank', 'kind: percent'))
-    assert.throws(() => loadOntology(bad), /thresholds\.position\.kind: "percent" is not one of relative, points, rank/)
-    const wrongKind = copyOntology((d) =>
-      replaceIn(join(d, 'config/thresholds.yaml'), 'kind: points\n    value: 0.5', 'kind: relative\n    value: 0.5'),
+    const dir = copyOntology((d) =>
+      replaceIn(join(d, 'value-types/value-type-anomaly-status.logos.yaml'), "  - value: Dismissed\n    displayName:\n      en: Dismissed", "  - value: Closed\n    displayName:\n      en: Closed"),
     )
-    assert.throws(() => new SeoService(new SeoDatabase(':memory:'), loadOntology(wrongKind)), /"ctr" must have kind points/)
+    assert.throws(() => service(dir), /Dismissed/)
   })
 
-  it('reports unresolved value type references', () => {
-    const dir = copyOntology((d) => replaceIn(join(d, 'objects/seo-anomaly.logos.yaml'), 'logos.seo.value.period', 'logos.seo.value.missing'))
-    assert.throws(() => loadOntology(dir), /Unresolved type references: .*previousPeriod → logos\.seo\.value\.missing/)
+  it('refuses a lifecycle that names unknown statuses or starts elsewhere', () => {
+    const unknown = copyOntology((d) => replaceIn(join(d, 'value-types/value-type-anomaly-status.logos.yaml'), '- Triaged', '- Archived'))
+    assert.throws(() => loadOntology(unknown), /lifecycle refers to unknown values: Archived/)
+    const start = copyOntology((d) => replaceIn(join(d, 'value-types/value-type-countermeasure-status.logos.yaml'), 'initialValue: Proposed', 'initialValue: Approved'))
+    assert.throws(() => service(start), /initialValue must be Proposed/)
   })
 
-  it('reports broken references in relations and functions', () => {
+  it('refuses invalid judgment conditions', () => {
+    const badUnit = copyOntology((d) => replaceIn(join(d, CONDITIONS), 'unit: rank', 'unit: percent'))
+    assert.throws(() => loadOntology(badUnit), /unit: "percent" is not one of relative, points, rank/)
+    const wrongUnit = copyOntology((d) => replaceIn(join(d, CONDITIONS), 'threshold: 3.9\n    unit: relative', 'threshold: 3.9\n    unit: points'))
+    assert.throws(() => service(wrongUnit), /JC-SESSIONS: unit points is not valid for sessions/)
+    const missing = copyOntology((d) => replaceIn(join(d, CONDITIONS), '    conditionType: numeric\n    confirmed: true\n', '    confirmed: true\n'))
+    assert.throws(() => loadOntology(missing), /conditionType: required/)
+  })
+
+  it('reports broken references in objects, relations and functions', () => {
+    const obj = copyOntology((d) => replaceIn(join(d, 'objects/seo-anomaly.logos.yaml'), 'logos.seo.value.period', 'logos.seo.value.missing'))
+    assert.throws(() => loadOntology(obj), /previousPeriod → logos\.seo\.value\.missing/)
     const rel = copyOntology((d) =>
-      replaceIn(join(d, 'relations/relation-anomaly-has-countermeasure.logos.yaml'), 'returnsTypeRef: logos.seo.object.countermeasure', 'returnsTypeRef: logos.seo.object.search-query'),
+      replaceIn(join(d, 'relations/relation-countermeasure-addresses-cause.logos.yaml'), 'returnsTypeRef: logos.seo.object.cause-hypothesis', 'returnsTypeRef: logos.seo.object.search-query'),
     )
-    assert.throws(() => loadOntology(rel), /anomaly-has-countermeasure\.countermeasures → logos\.seo\.object\.search-query/)
-    const fn = copyOntology((d) =>
-      replaceIn(join(d, 'functions/function-suggest-cause.logos.yaml'), 'logos.seo.value.priority-level', 'logos.seo.value.confidence-level'),
-    )
-    assert.throws(() => loadOntology(fn), /suggest-cause\.priority → logos\.seo\.value\.confidence-level/)
+    assert.throws(() => loadOntology(rel), /countermeasure-addresses-cause\.causeHypothesis → logos\.seo\.object\.search-query/)
+    const fn = copyOntology((d) => replaceIn(join(d, 'functions/function-suggest-cause.logos.yaml'), 'valueTypeRef: logos.seo.object.countermeasure', 'valueTypeRef: logos.seo.object.missing'))
+    assert.throws(() => loadOntology(fn), /suggest-cause\.countermeasure → logos\.seo\.object\.missing/)
   })
 
-  it('uses the threshold from config/thresholds.yaml for detection', () => {
-    const drop: [number, number][] = [...Array(7).fill([1000, 20]), ...Array(7).fill([950, 19])]
+  it('takes threshold, unit and direction from the judgment condition', () => {
+    const drop = ga4Csv(weeks([1000, 20], [950, 19]))
+    assert.equal(service().upload('a.csv', drop).anomalies.length, 1, '−5% sessions crosses ±3.9%')
 
-    const defaults = new SeoService(new SeoDatabase(':memory:'), loadOntology(SEO_DIR))
-    assert.equal(defaults.upload('a.csv', ga4Csv(drop)).anomalies.length, 1, '−5% sessions crosses ±3.9%')
+    const relaxed = copyOntology((d) => replaceIn(join(d, CONDITIONS), 'threshold: 3.9', 'threshold: 6'))
+    assert.equal(service(relaxed).upload('a.csv', drop).anomalies.length, 0, '−5% does not cross ±6%')
 
-    const relaxed = copyOntology((d) => replaceIn(join(d, 'config/thresholds.yaml'), 'value: 3.9', 'value: 6'))
-    const service = new SeoService(new SeoDatabase(':memory:'), loadOntology(relaxed))
-    assert.equal(service.upload('a.csv', ga4Csv(drop)).anomalies.length, 0, '−5% does not cross ±6%')
+    const decreaseOnly = copyOntology((d) => replaceIn(join(d, CONDITIONS), 'direction: both\n    threshold: 3.9', 'direction: decrease\n    threshold: 3.9'))
+    assert.equal(service(decreaseOnly).upload('a.csv', ga4Csv(weeks([1000, 20], [1050, 21]))).anomalies.length, 0, '+5% ignored when only decreases count')
+
+    const cvrRelative = copyOntology((d) => replaceIn(join(d, CONDITIONS), 'threshold: 0.7\n    unit: points', 'threshold: 7\n    unit: relative'))
+    const r = service(cvrRelative).upload('a.csv', ga4Csv(weeks([1000, 20], [1000, 18])))
+    assert.deepEqual(r.anomalies.map((a) => [a.metricKey, a.judgmentConditionId, a.threshold.kind]), [['cvr', 'JC-CVR', 'relative']])
   })
 
-  it('rejects stored objects that do not conform', () => {
-    const ontology = loadOntology(SEO_DIR)
-    assert.throws(() => ontology.assertObject('logos.seo.object.countermeasure', { countermeasureId: 'CM-1' }), /relatedAnomalyId: required/)
+  it('rejects objects that do not conform', () => {
+    assert.throws(() => loadOntology(SEO_DIR).assertObject('logos.seo.object.countermeasure', { countermeasureId: 'CM-1' }), /causeId: required/)
   })
 })

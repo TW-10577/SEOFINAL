@@ -1,6 +1,8 @@
 import { useState, type DragEvent } from 'react'
 import { api } from '../api/client'
-import { formatPeriod, SOURCE_LABELS } from '../format'
+import ErrorNotice from '../components/ErrorNotice'
+import { formatPeriod, sourceLabel } from '../format'
+import { useI18n } from '../i18n'
 import type { UploadResult } from '../types'
 import { useApi } from '../useApi'
 
@@ -11,32 +13,48 @@ interface FileOutcome {
 }
 
 export default function DataUpload() {
+  const { t } = useI18n()
   const datasets = useApi(api.datasets)
+  const deleted = useApi(api.deletedDatasets)
   const [busy, setBusy] = useState(false)
   const [over, setOver] = useState(false)
   const [outcomes, setOutcomes] = useState<FileOutcome[]>([])
-  const [deleting, setDeleting] = useState<string | null>(null)
-  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [working, setWorking] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+
+  const reloadLists = () => {
+    datasets.reload()
+    deleted.reload()
+  }
 
   async function remove(id: string) {
-    setDeleteError(null)
+    setActionError(null)
     try {
       const impact = await api.deletionImpact(id)
-      const lines = [`Delete ${id} (${impact.fileName}) and its uploaded rows?`]
-      if (impact.anomalies) {
-        lines.push(`This also deletes ${impact.anomalies} anomal${impact.anomalies === 1 ? 'y' : 'ies'} and ${impact.countermeasures} countermeasure(s).`)
-      }
-      if (impact.decidedCountermeasures) {
-        lines.push(`${impact.decidedCountermeasures} of those countermeasures already have an SEO team decision, which will be lost.`)
-      }
+      const lines = [t('up.confirmDelete', { id, file: impact.fileName })]
+      if (impact.anomalies) lines.push(t('up.confirmImpact', { a: impact.anomalies, c: impact.countermeasures }))
+      if (impact.decidedCountermeasures) lines.push(t('up.confirmDecided', { n: impact.decidedCountermeasures }))
       if (!window.confirm(lines.join('\n\n'))) return
-      setDeleting(id)
+      setWorking(id)
       await api.deleteDataset(id)
-      datasets.reload()
+      reloadLists()
     } catch (e) {
-      setDeleteError((e as Error).message)
+      setActionError((e as Error).message)
     } finally {
-      setDeleting(null)
+      setWorking(null)
+    }
+  }
+
+  async function restore(id: string) {
+    setActionError(null)
+    setWorking(id)
+    try {
+      await api.restoreDataset(id)
+      reloadLists()
+    } catch (e) {
+      setActionError((e as Error).message)
+    } finally {
+      setWorking(null)
     }
   }
 
@@ -56,7 +74,7 @@ export default function DataUpload() {
       setOutcomes([...results])
     }
     setBusy(false)
-    datasets.reload()
+    reloadLists()
   }
 
   function onDrop(e: DragEvent) {
@@ -69,9 +87,9 @@ export default function DataUpload() {
     <>
       <div className="page-head">
         <div>
-          <div className="eyebrow">Step 1 · Receive data</div>
-          <h1>Upload data</h1>
-          <p className="lead">GSC and GA4 exports as CSV, TXT/TSV or Excel. Each file is validated, standardised and compared week over week.</p>
+          <div className="eyebrow">{t('up.eyebrow')}</div>
+          <h1>{t('up.title')}</h1>
+          <p className="lead">{t('up.lead')}</p>
         </div>
       </div>
 
@@ -96,12 +114,12 @@ export default function DataUpload() {
                 e.target.value = ''
               }}
             />
-            <strong>{busy ? 'Uploading…' : 'Drop files here or click to choose'}</strong>
-            <span className="small muted">CSV, TXT / TSV (comma or tab separated), Excel (.xlsx, .xls). UTF-8, Shift_JIS and UTF-16 are all read.</span>
+            <strong>{busy ? t('up.uploading') : t('up.drop')}</strong>
+            <span className="small muted">{t('up.formats')}</span>
             <span className="small muted">
-              Week-over-week analysis: GSC 平均読み込み時間のチャート.csv, GA4 自由形式 export with 日付 rows (at least 14 days).
+              {t('up.analysed')}
               <br />
-              Stored for reference: GSC ページ / クエリ / デバイス / 国 exports. In an Excel file every sheet is read as its own dataset.
+              {t('up.reference')}
             </span>
           </label>
         </div>
@@ -109,7 +127,7 @@ export default function DataUpload() {
         {outcomes.length ? (
           <div className="panel">
             <div className="panel-head">
-              <h2>Upload results</h2>
+              <h2>{t('up.results')}</h2>
             </div>
             <div className="stack">
               {outcomes.map((o, i) =>
@@ -121,8 +139,13 @@ export default function DataUpload() {
                   <div key={i} className={`notice ${o.result.dataset.warnings.length ? 'info' : 'ok'}`}>
                     <strong>{o.fileName}</strong>:{' '}
                     {o.result.duplicate
-                      ? 'already uploaded, skipped.'
-                      : `${SOURCE_LABELS[o.result.dataset.source]}, ${o.result.dataset.rowCount} rows, ${formatPeriod(o.result.dataset.period)}. ${o.result.anomalies.length} anomal${o.result.anomalies.length === 1 ? 'y' : 'ies'} detected.`}
+                      ? t('up.duplicate')
+                      : t('up.summary', {
+                          type: sourceLabel(o.result.dataset.source, t),
+                          rows: o.result.dataset.rowCount,
+                          period: formatPeriod(o.result.dataset.period),
+                          n: o.result.anomalies.length,
+                        })}
                     {!o.result.duplicate && o.result.dataset.warnings.length ? (
                       <ul>
                         {o.result.dataset.warnings.map((w, j) => (
@@ -139,20 +162,20 @@ export default function DataUpload() {
 
         <div className="panel">
           <div className="panel-head">
-            <h2>Uploaded datasets</h2>
+            <h2>{t('up.datasets')}</h2>
           </div>
-          {datasets.error || deleteError ? <div className="notice error">{datasets.error ?? deleteError}</div> : null}
+          <ErrorNotice message={datasets.error ?? actionError} />
           {datasets.data?.length ? (
             <div className="table-wrap">
               <table className="data">
                 <thead>
                   <tr>
                     <th>ID</th>
-                    <th>File</th>
-                    <th>Type</th>
-                    <th>Period</th>
-                    <th className="num">Rows</th>
-                    <th className="num">Warnings</th>
+                    <th>{t('up.file')}</th>
+                    <th>{t('up.type')}</th>
+                    <th>{t('up.period')}</th>
+                    <th className="num">{t('up.rows')}</th>
+                    <th className="num">{t('up.warnings')}</th>
                     <th></th>
                   </tr>
                 </thead>
@@ -161,13 +184,13 @@ export default function DataUpload() {
                     <tr key={d.datasetId}>
                       <td className="mono">{d.datasetId}</td>
                       <td>{d.fileName}</td>
-                      <td>{SOURCE_LABELS[d.source]}</td>
+                      <td>{sourceLabel(d.source, t)}</td>
                       <td className="muted">{formatPeriod(d.period)}</td>
                       <td className="num">{d.rowCount}</td>
                       <td className="num">{d.warnings.length}</td>
                       <td className="num">
-                        <button className="btn small danger" disabled={deleting !== null} onClick={() => void remove(d.datasetId)}>
-                          {deleting === d.datasetId ? 'Deleting…' : 'Delete'}
+                        <button className="btn small danger" disabled={working !== null} onClick={() => void remove(d.datasetId)}>
+                          {working === d.datasetId ? t('up.deleting') : t('up.delete')}
                         </button>
                       </td>
                     </tr>
@@ -176,11 +199,50 @@ export default function DataUpload() {
               </table>
             </div>
           ) : datasets.loading ? (
-            <p className="muted">Loading…</p>
+            <p className="muted">{t('loading')}</p>
           ) : (
-            <p className="muted">Nothing uploaded yet.</p>
+            <p className="muted">{t('up.nothing')}</p>
           )}
         </div>
+
+        {deleted.data?.length ? (
+          <div className="panel">
+            <div className="panel-head">
+              <h2>{t('up.deleted')}</h2>
+            </div>
+            <p className="muted small" style={{ marginBottom: 8 }}>
+              {t('up.deletedHint')}
+            </p>
+            <div className="table-wrap">
+              <table className="data">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>{t('up.file')}</th>
+                    <th>{t('up.type')}</th>
+                    <th>{t('up.deletedAt')}</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {deleted.data.map((d) => (
+                    <tr key={d.datasetId}>
+                      <td className="mono">{d.datasetId}</td>
+                      <td>{d.fileName}</td>
+                      <td>{sourceLabel(d.source, t)}</td>
+                      <td className="muted">{new Date(d.deletedAt).toLocaleString()}</td>
+                      <td className="num">
+                        <button className="btn small" disabled={working !== null} onClick={() => void restore(d.datasetId)}>
+                          {t('up.restore')}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : null}
       </div>
     </>
   )

@@ -1,22 +1,24 @@
+import { api } from '../api/client'
 import AnomalyCard from '../components/AnomalyCard'
 import ComparisonTable from '../components/ComparisonTable'
-import { api } from '../api/client'
-import { formatPeriod, formatThreshold, formatValue, SOURCE_LABELS } from '../format'
+import ErrorNotice from '../components/ErrorNotice'
+import { formatPeriod, formatThreshold, formatValue, metricLabel, sourceLabel } from '../format'
+import { useI18n } from '../i18n'
 import { useApi } from '../useApi'
 
 const TREND_METRICS = [
-  { key: 'clicks', label: 'Clicks', kind: 'relative' as const },
-  { key: 'impressions', label: 'Impressions', kind: 'relative' as const },
-  { key: 'ctr', label: 'CTR', kind: 'points' as const },
-  { key: 'position', label: 'Avg position', kind: 'rank' as const },
+  { key: 'clicks', kind: 'relative' as const },
+  { key: 'impressions', kind: 'relative' as const },
+  { key: 'ctr', kind: 'points' as const },
+  { key: 'position', kind: 'rank' as const },
 ]
 
 export default function Dashboard({ onUpload }: { onUpload: () => void }) {
+  const { t, enumLabel, ontology } = useI18n()
   const { data, error, loading } = useApi(api.dashboard)
-  const ontology = useApi(api.ontology)
 
-  if (error) return <div className="notice error">{error}</div>
-  if (loading || !data) return <p className="muted">Loading…</p>
+  if (error) return <ErrorNotice message={error} />
+  if (loading || !data) return <p className="muted">{t('loading')}</p>
 
   const { stats } = data
   if (stats.datasets === 0) {
@@ -24,10 +26,10 @@ export default function Dashboard({ onUpload }: { onUpload: () => void }) {
       <>
         <Head />
         <div className="panel empty">
-          <p>No data uploaded yet.</p>
-          <p className="small">Upload a GSC daily export (平均読み込み時間のチャート.csv) or a GA4 daily export to start.</p>
+          <p>{t('dash.empty')}</p>
+          <p className="small">{t('dash.emptyHint')}</p>
           <button className="btn primary" onClick={onUpload} style={{ marginTop: 12 }}>
-            Upload data
+            {t('tab.upload')}
           </button>
         </div>
       </>
@@ -39,17 +41,18 @@ export default function Dashboard({ onUpload }: { onUpload: () => void }) {
       <Head />
       <div className="stack">
         <div className="metric-grid">
-          <Metric value={stats.datasets} label="Datasets" />
-          <Metric value={stats.openAnomalies} label="Open anomalies" />
-          <Metric value={stats.totalAnomalies} label="Anomalies detected" />
-          <Metric value={stats.proposedCountermeasures} label="Awaiting decision" />
-          <Metric value={stats.approvedCountermeasures} label="Approved actions" />
+          <Metric value={stats.datasets} label={t('dash.datasets')} />
+          <Metric value={stats.openAnomalies} label={t('dash.openAnomalies')} />
+          <Metric value={stats.totalAnomalies} label={t('dash.totalAnomalies')} />
+          <Metric value={stats.causesToReview} label={t('dash.causesToReview')} />
+          <Metric value={stats.proposedCountermeasures} label={t('dash.proposed')} />
+          <Metric value={stats.activeCountermeasures} label={t('dash.active')} />
         </div>
 
         {data.latest.map((l) => (
           <div className="panel" key={l.datasetId}>
             <div className="panel-head">
-              <h2>{SOURCE_LABELS[l.source]}: latest week vs previous week</h2>
+              <h2>{t('dash.latestVsPrevious', { source: sourceLabel(l.source, t) })}</h2>
               <span className="muted small">{l.fileName}</span>
             </div>
             {l.comparisons.length ? (
@@ -60,7 +63,7 @@ export default function Dashboard({ onUpload }: { onUpload: () => void }) {
                 <ComparisonTable comparisons={l.comparisons} />
               </>
             ) : (
-              <p className="muted small">Not enough days in this file for a week-over-week comparison.</p>
+              <p className="muted small">{t('dash.notEnoughDays')}</p>
             )}
           </div>
         ))}
@@ -68,7 +71,7 @@ export default function Dashboard({ onUpload }: { onUpload: () => void }) {
         <div className="grid-two">
           <div className="panel">
             <div className="panel-head">
-              <h2>Open anomalies</h2>
+              <h2>{t('dash.openAnomalies')}</h2>
             </div>
             {data.openAnomalies.length ? (
               <div className="stack">
@@ -77,23 +80,23 @@ export default function Dashboard({ onUpload }: { onUpload: () => void }) {
                 ))}
               </div>
             ) : (
-              <p className="muted">No open anomalies: no metric crossed its threshold in the latest week.</p>
+              <p className="muted">{t('dash.noOpen')}</p>
             )}
           </div>
 
           <div className="panel">
             <div className="panel-head">
-              <h2>Weekly trend (GSC)</h2>
+              <h2>{t('dash.trend')}</h2>
             </div>
             {data.weeklyTrend.length ? (
               <div className="table-wrap">
                 <table className="data">
                   <thead>
                     <tr>
-                      <th>Week</th>
+                      <th>{t('dash.week')}</th>
                       {TREND_METRICS.map((m) => (
                         <th key={m.key} className="num">
-                          {m.label}
+                          {metricLabel(m.key, t)}
                         </th>
                       ))}
                     </tr>
@@ -101,7 +104,9 @@ export default function Dashboard({ onUpload }: { onUpload: () => void }) {
                   <tbody>
                     {data.weeklyTrend.map((w) => (
                       <tr key={w.period.end}>
-                        <td className="muted">{w.period.start.slice(5)} 〜 {w.period.end.slice(5)}</td>
+                        <td className="muted">
+                          {w.period.start.slice(5)} 〜 {w.period.end.slice(5)}
+                        </td>
                         {TREND_METRICS.map((m) => (
                           <td key={m.key} className="num">
                             {w.values[m.key] === undefined ? '—' : formatValue(m.kind, m.key, w.values[m.key])}
@@ -113,36 +118,58 @@ export default function Dashboard({ onUpload }: { onUpload: () => void }) {
                 </table>
               </div>
             ) : (
-              <p className="muted">Upload a GSC daily export to see weekly trends.</p>
+              <p className="muted">{t('dash.trendEmpty')}</p>
             )}
           </div>
         </div>
 
-        {ontology.data ? (
+        {ontology ? (
           <div className="panel">
             <div className="panel-head">
-              <h2>Thresholds</h2>
-              <span className="muted small">config/thresholds.yaml · validated against the SEO ontology</span>
+              <h2>{t('dash.conditions')}</h2>
+              <span className="muted small">{t('dash.conditionsSource')}</span>
             </div>
-            <table className="data">
-              <tbody>
-                {Object.entries(ontology.data.thresholds).map(([metric, t]) => (
-                  <tr key={metric}>
-                    <td>{metric}</td>
-                    <td className="num">{formatThreshold(t.kind, t.value)}</td>
-                    <td>{t.confirmed ? <span className="badge good">confirmed</span> : <span className="badge warn">unconfirmed</span>}</td>
-                    <td className="muted">{t.source}</td>
+            <div className="table-wrap">
+              <table className="data">
+                <thead>
+                  <tr>
+                    <th>{t('cond.id')}</th>
+                    <th>{t('cond.name')}</th>
+                    <th>{t('cond.direction')}</th>
+                    <th className="num">{t('cond.threshold')}</th>
+                    <th>{t('cond.type')}</th>
+                    <th>{t('cond.status')}</th>
+                    <th>{t('cond.source')}</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {ontology.conditions.map((c) => (
+                    <tr key={c.conditionId}>
+                      <td className="mono">{c.conditionId}</td>
+                      <td>{c.name}</td>
+                      <td>{enumLabel('direction', c.direction)}</td>
+                      <td className="num">{formatThreshold(c.unit, c.threshold, t)}</td>
+                      <td>{enumLabel('condition-type', c.conditionType)}</td>
+                      <td>{c.confirmed ? <span className="badge good">{t('confirmed')}</span> : <span className="badge warn">{t('unconfirmed')}</span>}</td>
+                      <td className="muted small">{c.source}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="muted small" style={{ marginTop: 12 }}>
+              {t('dash.flatBands')}:{' '}
+              {Object.entries(ontology.flatBands)
+                .map(([k, b]) => `${metricLabel(k, t)} ${formatThreshold(b.unit, b.value, t)}${b.confirmed ? '' : ` (${t('unconfirmed')})`}`)
+                .join(' · ')}
+            </p>
           </div>
         ) : null}
 
         {data.warnings.length ? (
           <div className="panel">
             <div className="panel-head">
-              <h2>Data quality warnings</h2>
+              <h2>{t('dash.warnings')}</h2>
             </div>
             <table className="data">
               <tbody>
@@ -164,11 +191,12 @@ export default function Dashboard({ onUpload }: { onUpload: () => void }) {
 }
 
 function Head() {
+  const { t } = useI18n()
   return (
     <div className="page-head">
       <div>
-        <div className="eyebrow">SEO page performance</div>
-        <h1>Dashboard</h1>
+        <div className="eyebrow">{t('dash.eyebrow')}</div>
+        <h1>{t('tab.dashboard')}</h1>
       </div>
     </div>
   )

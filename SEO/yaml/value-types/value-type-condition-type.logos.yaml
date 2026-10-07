@@ -1,0 +1,33 @@
+# Loaded at startup by SEO/seo-api; checked against the API code.
+apiVersion: logos.ontology/v0.0.1
+kind: ValueType
+metadata:
+  id: logos.seo.value.condition-type
+  apiName: ConditionType
+  displayName:
+    en: Condition Type
+    ja: 条件タイプ
+  description:
+    en: Numeric conditions are evaluated automatically; ambiguous ones are recorded but need a person (ECM-05).
+    ja: 数値条件は自動判定、曖昧条件は記録のみで人が判断する（ECM-05）。
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-platform
+    ownerType: team
+  visibility: package
+  annotations:
+    logos.ext/source-namespace: logos.seo
+    logos.ext/consumed-by: SEO/seo-api (src/ontology.ts)
+    logos.ext/design-source: LOGOS_SEO_Ontology_Design.md_.md §9
+    logos.ext/locale-status: Japanese labels are a draft; business terms to be confirmed by the SEO team
+spec:
+  valueKind: enumerated_text
+  enumeratedValues:
+  - value: numeric
+    displayName:
+      en: Numeric
+      ja: 数値条件
+  - value: ambiguous
+    displayName:
+      en: Ambiguous
+      ja: 曖昧条件

@@ -2,7 +2,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parse } from 'yaml'
-import type { Threshold } from './types.ts'
+import type { FlatBand, JudgmentCondition } from './types.ts'
 
 export class OntologyError extends Error {}
 
@@ -14,6 +14,7 @@ const EXTERNAL_PRIMITIVES: Record<string, 'string' | 'number' | 'boolean' | 'dat
   'logos.shared-core.value.boolean': 'boolean',
   'logos.shared-core.value.date': 'date',
   'logos.retail-ec-common.value.subject-id': 'string',
+  'logos.retail-ec-common.value.record-id': 'string',
 }
 
 export interface FieldDef {
@@ -29,7 +30,7 @@ export interface EnumValue {
 }
 
 type ValueTypeDef =
-  | { id: string; kind: 'enum'; values: EnumValue[] }
+  | { id: string; kind: 'enum'; values: EnumValue[]; initial?: string; transitions?: Record<string, string[]> }
   | { id: string; kind: 'number'; min?: number; max?: number }
   | { id: string; kind: 'struct'; fields: FieldDef[] }
 
@@ -40,7 +41,7 @@ export interface ObjectDef {
   properties: FieldDef[]
 }
 
-export const THRESHOLD_TYPE = 'logos.seo.value.threshold'
+export const JUDGMENT_CONDITION_TYPE = 'logos.seo.object.judgment-condition'
 
 function readYamlDir(dir: string): { file: string; doc: any }[] {
   if (!existsSync(dir)) throw new OntologyError(`Ontology folder not found: ${dir}`)
@@ -68,10 +69,18 @@ export class Ontology {
     readonly dir: string,
     readonly valueTypes: Map<string, ValueTypeDef>,
     readonly objects: Map<string, ObjectDef>,
-    readonly thresholds: Record<string, Threshold>,
+    readonly conditions: JudgmentCondition[],
+    readonly flatBands: Record<string, FlatBand>,
     readonly relations: string[] = [],
     readonly functions: string[] = [],
   ) {}
+
+  // Lifecycle (design §8) declared on the enum: which statuses may follow the current one.
+  lifecycle(id: string): { initial: string; transitions: Record<string, string[]> } {
+    const vt = this.valueTypes.get(id)
+    if (vt?.kind !== 'enum' || !vt.initial || !vt.transitions) throw new OntologyError(`${id} has no lifecycle (initialValue and transitions)`)
+    return { initial: vt.initial, transitions: vt.transitions }
+  }
 
   enumValues(id: string): string[] {
     const vt = this.valueTypes.get(id)
@@ -154,7 +163,13 @@ export class Ontology {
       enums: Object.fromEntries(
         [...this.valueTypes.values()].flatMap((vt) => (vt.kind === 'enum' ? [[vt.id, vt.values] as const] : [])),
       ),
-      thresholds: this.thresholds,
+      conditions: this.conditions,
+      flatBands: this.flatBands,
+      lifecycles: Object.fromEntries(
+        [...this.valueTypes.values()].flatMap((vt) =>
+          vt.kind === 'enum' && vt.transitions ? [[vt.id, { initial: vt.initial, transitions: vt.transitions }] as const] : [],
+        ),
+      ),
     }
   }
 }
@@ -169,7 +184,17 @@ export function loadOntology(dir: string): Ontology {
     if (spec.valueKind === 'enumerated_text') {
       const values = (spec.enumeratedValues ?? []).map((v: any) => ({ value: String(v.value), displayName: v.displayName ?? {} }))
       if (!values.length) throw new OntologyError(`${file}: enumeratedValues is empty`)
-      valueTypes.set(id, { id, kind: 'enum', values })
+      const names = values.map((v: EnumValue) => v.value)
+      const transitions = spec.transitions as Record<string, string[]> | undefined
+      if (transitions) {
+        const bad = [
+          ...(spec.initialValue && !names.includes(spec.initialValue) ? [`initialValue ${spec.initialValue}`] : []),
+          ...Object.entries(transitions).flatMap(([from, tos]) => [from, ...(tos ?? [])].filter((v) => !names.includes(v))),
+          ...names.filter((n: string) => !(n in transitions)).map((n: string) => `no transitions entry for ${n}`),
+        ]
+        if (bad.length) throw new OntologyError(`${file}: lifecycle refers to unknown values: ${[...new Set(bad)].join(', ')}`)
+      }
+      valueTypes.set(id, { id, kind: 'enum', values, initial: spec.initialValue, transitions })
     } else if (spec.valueKind === 'numeric_value') {
       valueTypes.set(id, { id, kind: 'number', min: spec.numericConstraint?.min, max: spec.numericConstraint?.max })
     } else if (spec.valueKind === 'structured') {
@@ -218,20 +243,31 @@ export function loadOntology(dir: string): Ontology {
 
   if (unresolved.length) throw new OntologyError(`Unresolved type references: ${unresolved.join('; ')}`)
 
-  const ontology = new Ontology(dir, valueTypes, objects, {}, relations, functions)
-  const thresholdFile = join(dir, 'config', 'thresholds.yaml')
-  if (!existsSync(thresholdFile)) throw new OntologyError(`Threshold config not found: ${thresholdFile}`)
+  const conditionFile = join(dir, 'config', 'judgment-conditions.yaml')
+  if (!existsSync(conditionFile)) throw new OntologyError(`Judgment conditions not found: ${conditionFile}`)
   let raw: any
   try {
-    raw = parse(readFileSync(thresholdFile, 'utf8'))?.thresholds
+    raw = parse(readFileSync(conditionFile, 'utf8'))
   } catch (e) {
-    throw new OntologyError(`config/thresholds.yaml: invalid YAML (${(e as Error).message})`)
+    throw new OntologyError(`config/judgment-conditions.yaml: invalid YAML (${(e as Error).message})`)
   }
-  if (typeof raw !== 'object' || raw === null) throw new OntologyError('config/thresholds.yaml: expected a "thresholds:" map')
-  const errors = Object.entries(raw).flatMap(([k, v]) => ontology.validateValue(THRESHOLD_TYPE, v, `thresholds.${k}`))
-  if (errors.length) throw new OntologyError(`config/thresholds.yaml: ${errors.join('; ')}`)
-  Object.assign(ontology.thresholds, raw)
+  if (!Array.isArray(raw?.conditions)) throw new OntologyError('config/judgment-conditions.yaml: expected a "conditions:" list')
+  const probe = new Ontology(dir, valueTypes, objects, [], {}, relations, functions)
+  const def = objects.get(JUDGMENT_CONDITION_TYPE)
+  if (!def) throw new OntologyError(`Object type ${JUDGMENT_CONDITION_TYPE} not found`)
+  const errors = (raw.conditions as unknown[]).flatMap((c, i) => probe.validateFields(def.properties, c, `conditions[${i}]`))
+  const bandErrors = Object.entries(raw.flatBands ?? {}).flatMap(([k, b]: [string, any]) =>
+    typeof b?.value === 'number' && typeof b?.confirmed === 'boolean' && typeof b?.source === 'string'
+      ? probe.validateValue('logos.seo.value.change-kind', b.unit, `flatBands.${k}.unit`)
+      : [`flatBands.${k}: needs value (number), unit, confirmed (true/false) and source`],
+  )
+  if (errors.length || bandErrors.length) throw new OntologyError(`config/judgment-conditions.yaml: ${[...errors, ...bandErrors].join('; ')}`)
+  const ids = (raw.conditions as JudgmentCondition[]).map((c) => c.conditionId)
+  const dupes = ids.filter((id, i) => ids.indexOf(id) !== i)
+  if (dupes.length) throw new OntologyError(`config/judgment-conditions.yaml: duplicate conditionId ${dupes.join(', ')}`)
+
+  const ontology = new Ontology(dir, valueTypes, objects, raw.conditions, raw.flatBands ?? {}, relations, functions)
   return ontology
 }
 
-export const defaultOntologyDir = process.env.SEO_ONTOLOGY_DIR ?? fileURLToPath(new URL('../../', import.meta.url))
+export const defaultOntologyDir = process.env.SEO_ONTOLOGY_DIR ?? fileURLToPath(new URL('../../yaml/', import.meta.url))

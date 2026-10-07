@@ -101,9 +101,11 @@ describe('detection rules', () => {
     const sessions = json.anomalies.find((a: any) => a.metricKey === 'sessions')
     assert.ok(sessions, 'sessions anomaly expected for −5%')
     assert.equal(Math.round(sessions.changePercentage * 10) / 10, -5)
-    const cm = json.countermeasures.find((c: any) => c.relatedAnomalyId === sessions.anomalyId)
+    const cause = json.causes.find((h: any) => h.anomalyId === sessions.anomalyId)
+    const cm = json.countermeasures.find((c: any) => c.causeId === cause.causeId)
     assert.equal(cm.ownerTeam, 'SEO team')
-    assert.equal(cm.rule, 'SEO.txt ① 集客状況')
+    assert.equal(cause.rule, 'SEO.txt ① 集客状況')
+    assert.equal(sessions.judgmentConditionId, 'JC-SESSIONS')
     assert.ok(!json.anomalies.some((a: any) => a.metricKey === 'cvr'), 'CVR unchanged at 2%')
   })
 
@@ -121,9 +123,11 @@ describe('detection rules', () => {
     const ctr = json.dataset.comparisons.find((c: any) => c.metricKey === 'ctr')
     assert.equal(ctr.previous, 10)
     assert.equal(ctr.current, 6)
-    const cm = json.countermeasures.find((c: any) => json.anomalies.find((a: any) => a.anomalyId === c.relatedAnomalyId)?.metricKey === 'ctr')
+    const ctrAnomaly = json.anomalies.find((a: any) => a.metricKey === 'ctr')
+    const cause = json.causes.find((h: any) => h.anomalyId === ctrAnomaly.anomalyId)
+    const cm = json.countermeasures.find((c: any) => c.causeId === cause.causeId)
     assert.match(cm.description, /titles, meta descriptions/)
-    assert.equal(cm.ruleConfirmed, false)
+    assert.equal(cause.ruleConfirmed, false)
   })
 })
 
@@ -131,7 +135,7 @@ describe('review workflow', () => {
   it('enforces countermeasure transitions', async () => {
     const { json: list } = await call('GET', '/api/countermeasures')
     const id = list[0].countermeasureId
-    assert.equal((await call('PATCH', `/api/countermeasures/${id}`, JSON.stringify({ status: 'Verified' }))).status, 400)
+    assert.equal((await call('PATCH', `/api/countermeasures/${id}`, JSON.stringify({ status: 'VerifiedEffective' }))).status, 400)
     assert.equal((await call('PATCH', `/api/countermeasures/${id}`, JSON.stringify({ status: 'Approved' }))).json.status, 'Approved')
   })
 

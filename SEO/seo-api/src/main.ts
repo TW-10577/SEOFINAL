@@ -9,14 +9,13 @@ let service: SeoService
 try {
   service = new SeoService(new SeoDatabase(defaultDbFile), loadOntology(defaultOntologyDir))
 } catch (e) {
-  if (!(e instanceof OntologyError)) throw e
-  console.error(`Ontology check failed, not starting.\n  ${e.message}`)
+  console.error(`${e instanceof OntologyError ? 'Ontology check failed' : 'Startup failed'}, not starting.\n  ${(e as Error).message}`)
   process.exit(1)
 }
 
 createApp(service).listen(PORT, () => {
   const o = service.ontology.summary()
   console.log(`SEO API listening on http://localhost:${PORT}`)
-  console.log(`  ontology: ${o.dir} (${o.objects.length} object types, ${o.relations.length} relations, ${o.functions.length} functions, ${Object.keys(o.enums).length} enums, ${Object.keys(o.thresholds).length} thresholds)`)
+  console.log(`  ontology: ${o.dir} (${o.objects.length} object types, ${o.relations.length} relations, ${o.functions.length} functions, ${Object.keys(o.enums).length} enums, ${o.conditions.length} judgment conditions)`)
   console.log(`  database: ${defaultDbFile}`)
 })

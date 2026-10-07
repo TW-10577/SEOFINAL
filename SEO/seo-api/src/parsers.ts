@@ -35,7 +35,7 @@ export function parseUpload(text: string): ParsedFile {
     }
   }
   throw new UploadError(
-    `Unrecognised file format (first header cell: "${first}"). Supported: GSC 平均読み込み時間のチャート / ページ / クエリ exports and GA4 自由形式 exports, as CSV.`,
+    `Unrecognised file format (first header cell: "${first}"). Supported: GSC 平均読み込み時間のチャート / ページ / クエリ exports and GA4 自由形式 exports, as CSV, TXT/TSV or Excel (.xlsx, .xls).`,
   )
 }
 

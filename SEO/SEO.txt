@@ -1,35 +1,6 @@
-GA4とGSCで抽出しているデータについて共有させていただきます。
-CSVファイルのほうがGA4で、zipになっている方がGSCです。
-下記、それぞれの指標の定義になります。
-＜GSC＞
-・クエリ：ユーザーがGoogle検索で使用した検索キーワードやフレーズ。
-・表示回数：ユーザーの検索結果画面に、自社サイトのリンクが掲載・表示された回数（画面上にスクロールして表示されると1回とカウント）。
-・クリック数：ユーザーがGoogle検索結果に表示された自社サイトのリンクをクリックし、サイトへ流入した回数。
-・CTR：表示回数のうち、実際にクリックされた割合。計算式：（クリック数 ÷ 表示回数）× 100 (%)
-・掲載順位：Google検索結果画面における自社サイトのリンクの平均順位（最上部が1位）。
  
-＜GA4＞
-・セッション：ユーザーがサイトを訪問してから離脱するまでの「1回の訪問」。最後の操作から30分間操作がない場合、セッションは終了します。
-・e コマース購入数：サイト内でユーザーが購買手続き（purchase イベントの発生）を完了した合計回数。
-
-|GA4のCSVデータについて共有させていただきます。
-セッション：ユーザーがサイトを訪問した回数。1人のユーザーが複数回訪問した場合は、その都度カウントされる。
-アクティブユーザー：一定期間内にサイトを実際に利用したユーザー数。同一ユーザーの複数訪問は原則1ユーザーとして扱われる。
-トランザクション：サイト上で購入が完了した件数。1ユーザーが複数回購入した場合は、その購入回数分カウントされる。
+No.	Judgment Criteria	Primary Judgment	What to Check Next	AI Judgment / Action
+①	Traffic Acquisition — Sessions: ±3.9% or more WoW	Check the increase/decrease in organic and advertising traffic	If organic traffic decreases → Provide feedback to the SEO team. If advertising traffic decreases → Provide feedback to the advertising team. If both decrease → Report the one with the larger contribution to the decrease as the primary cause.	 
+②	Purchase Efficiency — CVR: ±0.7% or more WoW	Check changes in sessions and CV	Sessions increase + CV remains flat/decreases → Check the quality of traffic. Sessions remain flat + CVR decreases → Check products, pricing, and pages. CVR and sessions both increase → Identify the factors contributing to the improvement.	 
  
-AIの判断基準に関してもまとめましたのでご確認をお願いいたします。
  
-No.	判断条件	一次判定	次に確認する内容	AIの判断・対応
-①	集客状況	
-セッション前週比 ±3.9%以上
-	オーガニック・広告流入の増減を確認	オーガニック減が主因 → SEO担当へFB。広告流入減が主因 → 広告担当へFB。両方減少 → 減少寄与が大きい方を主因として報告
-②	購入効率	
-CVR前週比 ±0.7%以上
-	セッション・CVの増減を確認	
-セッション増＋CV横ばい/減 → 流入の質を確認。セッション横ばい＋CVR減 → 商品・価格・ページ側を確認。CVR・セッションとも増 → 改善要因を確認
-
-③	販売台数・価格影響	モデル別販売台数が前週比 ±10%以上	自社商品の価格が上がったか・下がったか・変更なしかを確認	販売増＋値下げ → 値下げ効果の可能性。販売減＋値上げ → 値上げ影響の可能性。価格変更と販売動向が一致しない場合 → 競合・需要・セールなど別要因を確認
-④	シェア・競合セール	
-シェアが前週比 ±2％以上
-	他社のセール内容を確認し、自社と比較	シェア減＋競合セール強化 → 競合施策の影響を確認。シェア増＋競合セール弱化 → 競合施策の弱さが影響した可能性。結果と一致しない場合 → 自社価格・商品構成など別要因を確認
-⑤	商品詳細への遷移率	商品詳細への遷移率が前週比 ±5%以上	先週、掲載モデルの変更・入れ替えを行ったか確認	遷移率増＋変更あり → 入れ替え効果あり。遷移率減＋変更あり → 掲載モデルを再評価し、別モデルへの変更を検討。変更なし → 流入やページ構成など別要因を確認

@@ -44,11 +44,15 @@ export function createApp(service: SeoService) {
         return { items: service.uploadFile(fileName, await readBody(req)) }
       },
     ],
+    ['GET', /^\/api\/datasets\/deleted$/, () => service.deletedDatasets()],
+    ['POST', /^\/api\/datasets\/([\w-]+)\/restore$/, (_req, [id]) => service.restoreDataset(id)],
     ['GET', /^\/api\/datasets\/([\w-]+)\/deletion-impact$/, (_req, [id]) => service.deletionImpact(id)],
     ['DELETE', /^\/api\/datasets\/([\w-]+)$/, (_req, [id]) => service.deleteDataset(id)],
     ['GET', /^\/api\/dashboard$/, () => service.dashboard()],
+    ['GET', /^\/api\/measurements$/, () => service.measurements()],
     ['GET', /^\/api\/anomalies$/, () => service.anomalies()],
     ['PATCH', /^\/api\/anomalies\/([\w-]+)$/, async (req, [id]) => service.setAnomalyStatus(id, (await readJson(req)).status)],
+    ['PATCH', /^\/api\/causes\/([\w-]+)$/, async (req, [id]) => service.setCauseReview(id, (await readJson(req)).reviewStatus)],
     ['GET', /^\/api\/countermeasures$/, () => service.countermeasures()],
     [
       'PATCH',
@@ -56,6 +60,7 @@ export function createApp(service: SeoService) {
       async (req, [id]) => service.setCountermeasureStatus(id, (await readJson(req)).status),
     ],
     ['GET', /^\/api\/reports\/weekly$/, () => service.weeklyReport()],
+    ['GET', /^\/api\/datasets\/([\w-]+)\/raw-rows$/, (_req, [id]) => service.datasetRawRows(id)],
     ['GET', /^\/api\/status-history$/, (req) => service.statusHistory(new URL(req.url ?? '/', 'http://x').searchParams.get('id') ?? undefined)],
   ]
 

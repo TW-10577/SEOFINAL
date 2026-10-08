@@ -7,7 +7,7 @@ metadata:
     en: Receive SEO Data
     ja: SEO データの受領
   description:
-    en: A1. The SEO team uploads a GA4 or Search Console CSV/Excel export; the system reads it, keeps every source row as
+    en: A1. The SEO team uploads a GA4 or Search Console export in any supported file format; the system detects the format from the contents, extracts its tables, reads them, keeps every source row as
       evidence and creates SEO Data values marked VALID or INVALID.
   version: 0.0.1
   owner:
@@ -25,7 +25,7 @@ spec:
     - inputId: data-source
       apiName: dataSource
       description:
-        en: GA4 or GSC, chosen on upload; checked against the file contents.
+        en: GA4 or GSC, detected from the file contents (recognised export layout, else GA4- or GSC-specific fields); selected by the SEO team only when the source is unknown.
       typeRef: logos.seo.value.data-source
       required: true
     - inputId: analysis-period

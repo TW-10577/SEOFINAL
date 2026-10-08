@@ -1,0 +1,106 @@
+apiVersion: logos.ontology/v0.0.1
+kind: ActionType
+metadata:
+  id: logos.seo.action.reject-countermeasure
+  apiName: RejectCountermeasure
+  displayName:
+    en: Reject Countermeasure
+    ja: 対策の却下
+  description:
+    en: A8 Review and Decide — the SEO team rejects the suggested action (PROPOSED → REJECTED).
+  version: 0.0.1
+  owner:
+    ownerId: team:logos-seo
+    ownerType: team
+  visibility: package
+  annotations:
+    logos.ext/design-source: LOGOS_SEO_Ontology_Design.md_.md §5 A8
+    logos.ext/performed-by: SEO team
+spec:
+  target:
+    targetTypeRef: logos.seo.object.countermeasure
+    targetMode: existing_instance
+  inputs:
+    - inputId: note
+      apiName: note
+      description:
+        en: Optional comment recorded with the decision.
+      typeRef: logos.seo.value.seo-text
+      nullable: true
+  riskLevel: medium
+  authorizationPolicyBindings:
+    - bindingId: primary-authorization
+      policyRef: logos.seo.policy.can-review-seo-outcome
+  approval:
+    mode: policy_driven
+    separationOfDuties:
+      - constraintId: no-self-approval
+        incompatibleDuties:
+          - requester
+          - approver
+        scope: action
+    reapprovalOnChange:
+      - input
+      - evidence
+      - ontology_release
+    recordComments: true
+  effects:
+    - effectId: reject
+      effectKind: lifecycle_transition
+      lifecycleTransitionRef: "#transition/reject"
+      atomicGroup: decide
+  evidenceRequirements:
+    - evidenceTypeRef: logos.seo.evidence.human-decision-record
+      onMissing: deny
+  idempotency:
+    keyExpression: concat(action.id, ':', target.id, ':', request.id)
+    scope: target_action
+    retention: P30D
+    onDuplicate: return_original_receipt
+    inputMismatchBehavior: reject
+    inputHashRequired: true
+  concurrency:
+    strategy: optimistic_version
+    tokenExpression: target.version
+    onConflict: reject
+    maxRetries: 0
+  execution:
+    executionMode: internal_atomic
+  failure:
+    failureClasses:
+      - validation
+      - authorization
+      - concurrency
+      - unknown
+    retryableClasses: []
+    compensationMode: manual_recovery
+    unknownResultPolicy: freeze_and_escalate
+  receipt:
+    required: true
+  observation:
+    required: true
+    strategy: read_back_after_commit
+    deadline: PT30S
+  reconciliation:
+    strategy: typed_comparison
+    successCriteria:
+      - target.status == 'REJECTED'
+    onUnknown: freeze_and_escalate
+  security:
+    classification: internal
+    agentRestrictions:
+      defaultAgentMode: deny
+      externalWriteAllowed: false
+  audit:
+    enabled: true
+    eventCategories:
+      - action
+      - lifecycle
+      - property_change
+    recordBeforeAfter: true
+    recordInputHash: true
+    recordEvidenceRefs: true
+    recordReleaseRefs: true
+    recordActionChain: true
+    integrityMode: hash_chain
+    retentionPolicyRef: logos.seo.policy.audit-retention

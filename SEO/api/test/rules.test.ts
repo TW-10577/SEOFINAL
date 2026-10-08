@@ -1,204 +1,232 @@
-// Client rules ① and ② (SEO.txt) through the full measurement engine.
+// rules.yaml (GA4_Rule_01 Sessions, GA4_Rule_02 CVR) through the full measurement engine:
+// every evaluation / source_analysis / pattern_analysis branch, with the cause, countermeasure and team it defines.
 import assert from 'node:assert/strict';
+import type { DB } from '../src/db.ts';
 import { describe, test } from 'node:test';
 import { localize } from '../src/i18n.ts';
+import { evalCondition, evalNumber } from '../src/measure/expr.ts';
 import { runMeasurements } from '../src/measure/engine.ts';
 import { getMeasurementDetail, listMeasurements } from '../src/measure/read.ts';
-import { change, judge, rule2FollowUp } from '../src/measure/logic.ts';
-import { config, freshDb, ga4Csv, importGa4, rule, type WeekValues } from './helpers.ts';
+import { importFiles } from '../src/import/index.ts';
+import { config, freshDb, ga4Csv, importGa4, type WeekValues } from './helpers.ts';
+
+const R1 = 'GA4_R01';
+const R2 = 'GA4_R02';
 
 const week = (total: [number, number], organic: [number, number], advertising: [number, number]): WeekValues => ({ total, organic, advertising });
 
-function measure(prev: WeekValues, cur: WeekValues, cfg = config()) {
-  const db = freshDb();
-  importGa4(db, cfg, ga4Csv(prev, cur));
-  const runId = runMeasurements(db, cfg);
-  const ms = listMeasurements(db, cfg, runId);
-  const detail = (ruleId: string) => localize(getMeasurementDetail(db, cfg, ms.find((m) => m.ruleId === ruleId)!.id)!, 'en');
-  return { db, runId, ms, r1: detail('GA4-R1'), r2: detail('GA4-R2') };
+async function measure(prev: WeekValues, cur: WeekValues, cfg = config(), gsc?: (db: DB) => unknown) {
+  const db = (await freshDb());
+  (await importGa4(db, cfg, ga4Csv(prev, cur)));
+  await gsc?.(db);
+  const runId = (await runMeasurements(db, cfg));
+  const ms = (await listMeasurements(db, cfg, runId));
+  const detail = async (ruleId: string) => localize((await getMeasurementDetail(db, cfg, ms.find((m) => m.ruleId === ruleId)!.id))!, 'en');
+  return { r1: (await detail(R1)), r2: (await detail(R2)) };
 }
 
-describe('Rule ① Traffic Acquisition — Sessions ±3.9% WoW', () => {
-  test('change below ±3.9% → OK, no anomaly', () => {
-    const { r1 } = measure(week([1000, 10], [500, 5], [100, 1]), week([962, 10], [480, 5], [100, 1]));
+/** Sessions only: CV kept proportional so rule ② stays quiet. */
+const sessions = (total: number, organic: number, advertising: number) => week([total, total / 10], [organic, organic / 10], [advertising, advertising / 10]);
+
+describe('rules.yaml is loaded as written', () => {
+  test('two GA4 rules with their thresholds and required GA4 columns', () => {
+    const cfg = config();
+    assert.deepEqual(cfg.rules.map((r) => [r.id, r.metric, r.thresholdValue, r.thresholdUnit]), [
+      [R1, 'sessions', 3.9, 'percent'],
+      [R2, 'cvr', 0.7, 'percent'],
+    ]);
+    assert.equal(cfg.segments.organic.value, '通販（全体） オーガニックサーチ');
+    assert.deepEqual(cfg.investigations.map((x) => [x.id, x.trigger.ruleId, x.checks.length, x.priority.length]), [['GSC_R01', R1, 4, 6]]);
+    assert.equal(cfg.segments.advertising.value, '通販（全体） ペイド系合算');
+    assert.deepEqual(cfg.specs[R2]!.fields.map((f) => [f.key, f.segment, f.sourceMetric, f.metric]), [
+      ['sessions', '通販（全体）', 'セッション', 'sessions'],
+      ['purchases', '通販（全体）', 'e コマース購入数', 'ecommerce_purchases'],
+    ]);
+  });
+
+  test('expressions: AND, abs(), unknown values never decide', () => {
+    assert.equal(evalCondition('abs(x) < 3.9', { x: -3.8 }), true);
+    assert.equal(evalCondition('x <= -3.9', { x: -3.9000000000000004 }), true);
+    assert.equal(evalCondition('a < 0 AND b >= 0', { a: -1, b: 0 }), true);
+    assert.equal(evalCondition('a < 0 AND b >= 0', { a: -1 }), null);
+    assert.equal(evalNumber('((c - p) / p) * 100', { c: 5, p: 0 }), null);
+  });
+});
+
+describe('GA4_Rule_01 Traffic Acquisition — Sessions', () => {
+  test('|WoW| < 3.9% → OK, no anomaly', async () => {
+    const { r1 } = (await measure(sessions(1000, 500, 100), sessions(962, 480, 100)));
     assert.equal(r1.measurement.status, 'OK');
-    assert.ok(Math.abs(r1.measurement.changeRate! - -3.8) < 1e-9);
     assert.equal(r1.anomaly, null);
-    assert.equal(r1.cause, null);
   });
 
-  test('change exactly −3.9% → NG (criterion is "3.9% or more")', () => {
-    const { r1 } = measure(week([1000, 10], [500, 5], [100, 1]), week([961, 10], [461, 5], [100, 1]));
+  test('exactly −3.9% → NG', async () => {
+    const { r1 } = (await measure(sessions(1000, 500, 100), sessions(961, 480, 100)));
     assert.equal(r1.measurement.status, 'NG');
-    assert.equal(r1.anomaly?.state, 'Detected');
   });
 
-  test('increase beyond +3.9% → NG as well (±)', () => {
-    const { r1 } = measure(week([1000, 10], [500, 5], [100, 1]), week([1100, 10], [600, 5], [100, 1]));
+  test('increase ≥ 3.9% → NG improvement, primary contributor = larger positive change', async () => {
+    const { r1 } = (await measure(sessions(1000, 500, 100), sessions(1050, 520, 130)));
     assert.equal(r1.measurement.status, 'NG');
-    assert.ok(r1.anomaly);
-    // Neither channel decreased → no client follow-up, no countermeasure.
-    assert.equal(r1.cause?.branch, 'none');
+    assert.equal(r1.cause!.branch, 'traffic_increase');
+    // rules.yaml gives only the cause type: the cause reads as the type and the primary contributor.
+    assert.equal(r1.cause!.causeText, 'Traffic increase — primary contributor: Advertising traffic (+210 sessions).');
+    assert.match(r1.countermeasures[0]!.actionText, /^Review the traffic source with the larger increase/);
+    assert.equal(r1.countermeasures[0]!.targetType, 'traffic_source', 'the contributor is the target');
+    assert.equal(r1.countermeasures[0]!.responsibleTeam, null);
+  });
+
+  test('organic ↓, advertising not ↓ → organic decrease, SEO team', async () => {
+    const { r1 } = (await measure(sessions(1000, 500, 100), sessions(950, 450, 110)));
+    assert.equal(r1.cause!.branch, 'organic_traffic_decrease');
+    assert.equal(r1.countermeasures[0]!.responsibleTeam, 'SEO team');
+    assert.equal(r1.countermeasures[0]!.targetType, 'traffic_source');
+    assert.match(r1.countermeasures[0]!.reason, /Organic traffic decreased compared with the previous week/);
+  });
+
+  test('advertising ↓, organic not ↓ → advertising decrease, Advertising team', async () => {
+    const { r1 } = (await measure(sessions(1000, 500, 100), sessions(950, 510, 60)));
+    assert.equal(r1.cause!.branch, 'advertising_traffic_decrease');
+    assert.equal(r1.countermeasures[0]!.responsibleTeam, 'Advertising team');
+  });
+
+  test('both ↓, organic decrease larger → organic primary', async () => {
+    const { r1 } = (await measure(sessions(1000, 500, 100), sessions(940, 440, 80)));
+    assert.equal(r1.cause!.branch, 'both_traffic_sources_decreased:organic_primary');
+    assert.match(r1.countermeasures[0]!.actionText, /^Investigate Organic traffic using GSC/);
+    assert.equal(r1.countermeasures[0]!.responsibleTeam, 'SEO team');
+  });
+
+  test('both ↓, advertising decrease larger → advertising primary', async () => {
+    const { r1 } = (await measure(sessions(1000, 500, 100), sessions(950, 490, 60)));
+    assert.equal(r1.cause!.branch, 'both_traffic_sources_decreased:advertising_primary');
+    assert.equal(r1.countermeasures[0]!.responsibleTeam, 'Advertising team');
+  });
+
+  test('both ↓ by the same amount → both equal, SEO and Advertising', async () => {
+    const { r1 } = (await measure(sessions(1000, 500, 100), sessions(950, 470, 70)));
+    assert.equal(r1.cause!.branch, 'both_traffic_sources_decreased:equal_contribution');
+    assert.equal(r1.countermeasures[0]!.responsibleTeam, 'SEO and Advertising team');
+  });
+
+  test('total ↓ but neither source ↓ → NG without a rules.yaml cause; nothing proposed', async () => {
+    const { r1 } = (await measure(sessions(1000, 500, 100), sessions(950, 500, 100)));
+    assert.equal(r1.measurement.status, 'NG');
+    assert.equal(r1.cause!.branch, 'undetermined');
     assert.equal(r1.countermeasures.length, 0);
   });
 
-  test('organic traffic decrease → feedback to the SEO team', () => {
-    const { r1 } = measure(week([1000, 10], [500, 5], [100, 1]), week([900, 10], [400, 5], [100, 1]));
-    assert.equal(r1.cause?.branch, 'organic');
-    assert.equal(r1.countermeasures.length, 1);
-    assert.equal(r1.countermeasures[0]!.actionText, 'Provide feedback to the SEO team.');
-    assert.equal(r1.countermeasures[0]!.responsibleTeam, 'SEO team');
-    assert.equal(r1.countermeasures[0]!.status, 'Proposed');
-  });
-
-  test('advertising traffic decrease → feedback to the advertising team', () => {
-    const { r1 } = measure(week([1000, 10], [500, 5], [100, 1]), week([950, 10], [500, 5], [50, 1]));
-    assert.equal(r1.cause?.branch, 'advertising');
-    assert.deepEqual(r1.countermeasures.map((k) => k.actionText), ['Provide feedback to the advertising team.']);
-    // No GSC evidence: GSC supports rule ① only when organic decreases.
-    assert.ok(!r1.cause!.supportingEvidence.tables.some((t) => t.title.startsWith('GSC')));
-  });
-
-  test('both decrease → larger contribution is the primary cause (organic)', () => {
-    const { r1 } = measure(week([1000, 10], [500, 5], [100, 1]), week([900, 10], [430, 5], [70, 1]));
-    assert.equal(r1.cause?.branch, 'both-organic-primary');
-    assert.match(r1.cause!.causeText, /organic traffic has the larger contribution/);
-    assert.equal(r1.countermeasures[0]!.actionText, 'Provide feedback to the SEO team.');
-    assert.match(r1.countermeasures[0]!.reason, /primary cause/);
-    assert.match(r1.countermeasures[1]!.reason, /secondary/);
-  });
-
-  test('both decrease → larger contribution is the primary cause (advertising)', () => {
-    const { r1 } = measure(week([1000, 10], [500, 5], [100, 1]), week([900, 10], [480, 5], [20, 1]));
-    assert.equal(r1.cause?.branch, 'both-advertising-primary');
-    assert.equal(r1.countermeasures[0]!.actionText, 'Provide feedback to the advertising team.');
-    const shares = r1.evidence.tables[0]!.rows.map((r) => r[6]);
-    assert.deepEqual(shares, ['—', '20.0%', '80.0%']);
-  });
-
-  test('cause is never confirmed by the system', () => {
-    const { r1 } = measure(week([1000, 10], [500, 5], [100, 1]), week([900, 10], [400, 5], [100, 1]));
-    assert.equal(r1.cause?.reviewStatus, 'NotReviewed');
+  test('previous week 0 → NOT_EVALUABLE (division by zero)', async () => {
+    const { r1 } = (await measure(sessions(0, 0, 0), sessions(950, 500, 100)));
+    assert.equal(r1.measurement.status, 'NOT_EVALUABLE');
   });
 });
 
-describe('Rule ② Purchase Efficiency — CVR ±0.7% WoW', () => {
-  test('threshold unit not confirmed → NOT_EVALUABLE with both readings, no anomaly', () => {
-    const { r2 } = measure(week([1000, 10], [500, 5], [100, 1]), week([1000, 8], [500, 5], [100, 1]));
-    assert.equal(r2.measurement.status, 'NOT_EVALUABLE');
-    assert.match(r2.measurement.reason, /unit is not confirmed/);
-    assert.match(r2.measurement.reason, /relative change -20\.00%/);
-    assert.equal(r2.anomaly, null);
-  });
+describe('GA4_Rule_02 Purchase Efficiency — CVR', () => {
+  const cvr = (s: number, cv: number) => week([s, cv], [s / 2, cv / 2], [s / 10, cv / 10]);
 
-  const relative = config((c) => (rule(c, 'GA4-R2').thresholdUnit = 'percent'));
-  const points = config((c) => (rule(c, 'GA4-R2').thresholdUnit = 'percentage_points'));
-
-  test('relative unit: change below 0.7% → OK', () => {
-    // CVR 1.000% → 0.995% = −0.5% relative
-    const { r2 } = measure(week([10000, 100], [500, 5], [100, 1]), week([10000, 99.5], [500, 5], [100, 1]), relative);
+  test('|CVR WoW| < 0.7% → OK', async () => {
+    const { r2 } = (await measure(cvr(10000, 1000), cvr(10000, 1005)));
     assert.equal(r2.measurement.status, 'OK');
   });
 
-  test('relative unit: change at / beyond 0.7% → NG + anomaly', () => {
-    const at = measure(week([10000, 1000], [500, 5], [100, 1]), week([10000, 993], [500, 5], [100, 1]), relative).r2;
-    assert.equal(at.measurement.status, 'NG');
-    const beyond = measure(week([10000, 100], [500, 5], [100, 1]), week([10000, 90], [500, 5], [100, 1]), relative).r2;
-    assert.equal(beyond.measurement.status, 'NG');
-    assert.equal(beyond.anomaly?.state, 'Detected');
-  });
-
-  test('percentage-point unit: −0.1 pt → OK; −0.7 pt → NG', () => {
-    assert.equal(measure(week([1000, 10], [500, 5], [100, 1]), week([1000, 9], [500, 5], [100, 1]), points).r2.measurement.status, 'OK');
-    assert.equal(measure(week([1000, 10], [500, 5], [100, 1]), week([1000, 3], [500, 5], [100, 1]), points).r2.measurement.status, 'NG');
-  });
-
-  test('"flat" not defined → branch undetermined, no countermeasure', () => {
-    const { r2 } = measure(week([1000, 10], [500, 5], [100, 1]), week([1000, 8], [500, 5], [100, 1]), relative);
+  test('CVR ↑ ≥ 0.7% → NG improvement', async () => {
+    const { r2 } = (await measure(cvr(10000, 1000), cvr(10000, 1010)));
     assert.equal(r2.measurement.status, 'NG');
-    assert.equal(r2.cause?.branch, 'undetermined');
-    assert.equal(r2.countermeasures.length, 0);
+    assert.equal(r2.cause!.branch, 'conversion_improvement');
   });
 
-  const banded = config((c) => {
-    rule(c, 'GA4-R2').thresholdUnit = 'percent';
-    rule(c, 'GA4-R2').flatBandPercent = 1;
+  test('sessions ↑, purchases flat → traffic quality issue', async () => {
+    const { r2 } = (await measure(cvr(10000, 1000), cvr(11000, 1000)));
+    assert.equal(r2.cause!.branch, 'traffic_quality_issue');
+    assert.equal(r2.countermeasures[0]!.responsibleTeam, 'SEO and Advertising team');
   });
 
-  test('sessions increase + CV flat/decrease → check the quality of traffic', () => {
-    const { r2 } = measure(week([1000, 10], [500, 5], [100, 1]), week([1200, 10], [500, 5], [100, 1]), banded);
-    assert.equal(r2.cause?.branch, 'traffic_quality');
-    assert.equal(r2.countermeasures[0]!.actionText, 'Check the quality of traffic.');
+  test('sessions flat, purchases ↓ → conversion side issue, Ecommerce', async () => {
+    const { r2 } = (await measure(cvr(10000, 1000), cvr(10000, 900)));
+    assert.equal(r2.cause!.branch, 'conversion_side_issue');
+    assert.equal(r2.countermeasures[0]!.responsibleTeam, 'Ecommerce team');
   });
 
-  test('sessions flat + CVR decrease → check products, pricing, and pages', () => {
-    const { r2 } = measure(week([1000, 10], [500, 5], [100, 1]), week([1005, 8], [500, 5], [100, 1]), banded);
-    assert.equal(r2.cause?.branch, 'product_price_page');
-    assert.equal(r2.countermeasures[0]!.actionText, 'Check products, pricing, and pages.');
-  });
-
-  test('CVR and sessions both increase → identify the improvement factors', () => {
-    const { r2 } = measure(week([1000, 10], [500, 5], [100, 1]), week([1200, 15], [500, 5], [100, 1]), banded);
-    assert.equal(r2.cause?.branch, 'improvement');
-    assert.equal(r2.countermeasures[0]!.actionText, 'Identify the factors contributing to the improvement.');
-  });
-
-  test('combination not covered by the client rule → no branch, no countermeasure', () => {
-    // Sessions down and CVR down (the case in the client dummy data).
-    const { r2 } = measure(week([1000, 10], [500, 5], [100, 1]), week([900, 8], [500, 5], [100, 1]), banded);
-    assert.equal(r2.cause?.branch, 'none');
-    assert.equal(r2.countermeasures.length, 0);
-  });
-
-  test('pure branch logic: unknown band never picks a branch', () => {
-    const f = rule2FollowUp(change(1000, 1200), change(10, 10), change(1, 0.83), null);
-    assert.equal(f.branch, 'undetermined');
+  test('sessions and purchases ↑, sessions faster → traffic growth outpaced conversion growth', async () => {
+    const { r2 } = (await measure(cvr(10000, 1000), cvr(12000, 1100)));
+    assert.equal(r2.cause!.branch, 'traffic_growth_outpaced_purchase_growth');
   });
 });
 
-describe('NOT_EVALUABLE — never an incorrect OK', () => {
-  test('missing threshold', () => {
-    const cfg = config((c) => (rule(c, 'GA4-R1').thresholdValue = null));
-    const { r1 } = measure(week([1000, 10], [500, 5], [100, 1]), week([500, 10], [250, 5], [100, 1]), cfg);
-    assert.equal(r1.measurement.status, 'NOT_EVALUABLE');
-    assert.match(r1.measurement.reason, /No threshold/);
+describe('GSC_R01 Organic Traffic Decrease Investigation', () => {
+  const W1 = { start: '2026-09-10', end: '2026-09-16' };
+  const W2 = { start: '2026-09-17', end: '2026-09-23' };
+  const gscCsv = (head: string, rows: [string, number, number, number][]) =>
+    Buffer.from([`${head},クリック数,表示回数,CTR,掲載順位`, ...rows.map(([k, c, i, p]) => `${k},${c},${i},${((c / i) * 100).toFixed(2)}%,${p}`)].join('\n'));
+  const week = (db: DB, head: string, period: typeof W1, rows: [string, number, number, number][]) =>
+    importFiles(db, config(), [{ fileName: `${head}-${period.start}.csv`, buffer: gscCsv(head, rows) }], { period });
+  const organicDown = [sessions(1000, 500, 100), sessions(950, 450, 110)] as const;
+
+  test('query clicks ↓ + position worse → ranking deterioration (high), ranking_drop countermeasure', async () => {
+    const { r1 } = (await measure(...organicDown, config(), async (db) => {
+      (await week(db, '上位のクエリ', W1, [['gaming pc', 300, 3000, 3], ['dospara', 600, 1000, 1]]));
+      (await week(db, '上位のクエリ', W2, [['gaming pc', 200, 3000, 4.5], ['dospara', 590, 1000, 1]]));
+    }));
+    const inv = r1.cause!.analysis!.investigation!;
+    assert.equal(inv.matched, 'queries_with_click_decrease AND position_drop');
+    assert.equal(inv.cause, 'Possible ranking deterioration for affected queries.');
+    assert.equal(inv.countermeasureKey, 'ranking_drop');
+    assert.equal(inv.confidence, 'high');
+    assert.deepEqual(inv.affectedQueries, ['gaming pc', 'dospara']);
+    assert.match(r1.countermeasures[1]!.actionText, /^Review affected queries and pages\./);
+    assert.equal(r1.countermeasures[1]!.responsibleTeam, 'SEO team');
   });
 
-  test('missing previous period', () => {
-    const db = freshDb();
-    const cfg = config();
-    importGa4(db, cfg, ga4Csv(week([1000, 10], [500, 5], [100, 1]), week([500, 10], [250, 5], [100, 1])));
-    const runId = runMeasurements(db, cfg, { currentEnd: '2026-09-16' }); // previous week = 09-03..09-09: no data
-    const m = listMeasurements(db, cfg, runId);
-    assert.ok(m.every((x) => x.status === 'NOT_EVALUABLE'));
-    assert.match(localize(m[0]!, 'en').reason, /previous period missing/);
+  test('query impressions ↓ (position same) → visibility decrease, impression_drop', async () => {
+    const { r1 } = (await measure(...organicDown, config(), async (db) => {
+      (await week(db, '上位のクエリ', W1, [['gaming pc', 300, 3000, 3]]));
+      (await week(db, '上位のクエリ', W2, [['gaming pc', 250, 2500, 3]]));
+    }));
+    const inv = r1.cause!.analysis!.investigation!;
+    assert.equal(inv.matched, 'queries_with_impression_decrease');
+    assert.equal(inv.countermeasureKey, 'impression_drop');
+    assert.equal(inv.confidence, 'medium');
   });
 
-  test('missing current period', () => {
-    const db = freshDb();
-    const cfg = config();
-    importGa4(db, cfg, ga4Csv(week([1000, 10], [500, 5], [100, 1]), week([500, 10], [250, 5], [100, 1])));
-    const runId = runMeasurements(db, cfg, { currentEnd: '2026-09-30' });
-    assert.match(localize(listMeasurements(db, cfg, runId)[0]!, 'en').reason, /current period missing/);
+  test('decrease concentrated on one device → device_specific_drop', async () => {
+    const { r1 } = (await measure(...organicDown, config(), async (db) => {
+      (await week(db, 'デバイス', W1, [['モバイル', 600, 3000, 3], ['PC', 300, 1000, 2]]));
+      (await week(db, 'デバイス', W2, [['モバイル', 500, 3000, 3], ['PC', 295, 1000, 2]]));
+    }));
+    const inv = r1.cause!.analysis!.investigation!;
+    assert.equal(inv.matched, 'affected_device');
+    assert.equal(inv.affectedDevice, 'モバイル');
+    assert.equal(inv.countermeasureKey, 'device_specific_drop');
   });
 
-  test('missing required metric (no CV column) → rule ② not evaluable', () => {
-    const cfg = config((c) => (c.metricNames.cv.value = ['トランザクション']));
-    const { r2 } = measure(week([1000, 10], [500, 5], [100, 1]), week([500, 10], [250, 5], [100, 1]), cfg);
-    assert.equal(r2.measurement.status, 'NOT_EVALUABLE');
-    assert.match(r2.measurement.reason, /No CV/);
+  test('no GSC data for the measured weeks → fallback, insufficient_data, no_clear_cause', async () => {
+    const { r1 } = (await measure(...organicDown));
+    const inv = r1.cause!.analysis!.investigation!;
+    assert.equal(inv.matched, null);
+    assert.equal(inv.cause, 'No single cause can be determined from the available GSC data. Further investigation is required.');
+    assert.equal(inv.confidence, 'insufficient_data');
+    assert.equal(inv.countermeasureKey, 'no_clear_cause');
+    assert.ok(inv.checks.every((c) => !c.available));
   });
 
-  test('division by zero (previous sessions 0)', () => {
-    const r = judge(rule(config(), 'GA4-R1'), change(0, 100));
-    assert.equal(r.status, 'NOT_EVALUABLE');
-    assert.match(r.reason.en, /division by zero/);
+  test('3-month snapshot (not the measured weeks) is never compared', async () => {
+    const { r1 } = (await measure(...organicDown, config(), async (db) => {
+      (await week(db, '上位のクエリ', { start: '2026-06-16', end: '2026-09-15' }, [['gaming pc', 300, 3000, 3]]));
+    }));
+    assert.equal(r1.cause!.analysis!.investigation!.confidence, 'insufficient_data');
   });
 
-  test('no GA4 data at all', () => {
-    const db = freshDb();
-    const cfg = config();
-    const runId = runMeasurements(db, cfg);
-    assert.ok(listMeasurements(db, cfg, runId).every((m) => m.status === 'NOT_EVALUABLE'));
+  test('trigger: runs when both decreased (advertising primary) — organic still decreased', async () => {
+    const { r1 } = (await measure(sessions(1000, 500, 100), sessions(950, 490, 60)));
+    assert.equal(r1.cause!.branch, 'both_traffic_sources_decreased:advertising_primary');
+    assert.ok(r1.cause!.analysis!.investigation);
+  });
+
+  test('trigger: not run when organic did not decrease', async () => {
+    const { r1 } = (await measure(sessions(1000, 500, 100), sessions(950, 510, 60)));
+    assert.equal(r1.cause!.branch, 'advertising_traffic_decrease');
+    assert.equal(r1.cause!.analysis, null);
+    assert.equal(r1.countermeasures.length, 1);
   });
 });

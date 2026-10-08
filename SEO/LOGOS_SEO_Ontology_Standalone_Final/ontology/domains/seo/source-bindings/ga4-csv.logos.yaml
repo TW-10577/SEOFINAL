@@ -4,7 +4,7 @@ metadata:
   id: logos.seo.binding.ga4-csv
   apiName: GA4ExplorationsExport
   displayName:
-    en: GA4 Explorations Export (CSV/Excel)
+    en: GA4 Explorations Export (file upload)
     ja: GA4 探索エクスポート
   description:
     en: "GA4 Explorations free-form export: comment lines, a segment header row, a metric header row (日付 + metrics), a 総計

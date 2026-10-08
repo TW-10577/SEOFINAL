@@ -1,12 +1,14 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { loadConfig, type AppConfig } from '../src/config.ts';
-import { openDb, type DB } from '../src/db.ts';
+import { after } from 'node:test';
+import { databaseUrl, openDb, type DB } from '../src/db.ts';
 import { addDays } from '../src/import/ga4.ts';
 import { importFiles } from '../src/import/index.ts';
 import { loadOntology, type Ontology } from '../src/ontology.ts';
 
-export const DATA_DIR = resolve(import.meta.dirname, '../../Data');
+/** The client files; SEO_TEST_DATA_DIR points at another copy (e.g. extracted from git). */
+export const DATA_DIR = process.env.SEO_TEST_DATA_DIR ?? resolve(import.meta.dirname, '../../Data');
 export const GA4_DIR = resolve(DATA_DIR, 'GA4');
 export const GSC_DIR = resolve(DATA_DIR, 'https___www.dospara.co.jp_-Performance-on-Search-2026-09-18');
 
@@ -23,9 +25,42 @@ export function rule(c: AppConfig, id: string) {
   return c.rules.find((r) => r.id === id)!;
 }
 
-export function freshDb(): DB {
-  return openDb(':memory:');
+// Tests run against PostgreSQL: TEST_DATABASE_URL, else DATABASE_URL with the database name + "_test".
+// Every freshDb() is its own schema (dropped when the test file finishes), so tests never touch real data.
+export function testDatabaseUrl(): string {
+  if (process.env.TEST_DATABASE_URL) return process.env.TEST_DATABASE_URL;
+  const url = new URL(databaseUrl());
+  url.pathname = `${url.pathname.replace(/^\//, '')}_test`;
+  return url.toString();
 }
+
+const opened: { db: DB; schema: string }[] = [];
+let counter = 0;
+
+export async function freshDb(): Promise<DB> {
+  const schema = `t_${process.pid}_${Date.now().toString(36)}_${++counter}`;
+  const db = await openDb(testDatabaseUrl(), { schema });
+  opened.push({ db, schema });
+  return db;
+}
+
+/** A second connection to an existing test schema (data survives reopening). */
+export async function reopenDb(db: DB): Promise<DB> {
+  const entry = opened.find((o) => o.db === db);
+  if (!entry) throw new Error('reopenDb: not a test database');
+  const d = await openDb(testDatabaseUrl(), { schema: entry.schema });
+  opened.push({ db: d, schema: entry.schema });
+  return d;
+}
+
+after(async () => {
+  const schemas = [...new Set(opened.map((o) => o.schema))];
+  for (const o of opened) await o.db.close().catch(() => {});
+  if (!schemas.length) return;
+  const admin = await openDb(testDatabaseUrl());
+  for (const s of schemas) await admin.exec(`DROP SCHEMA IF EXISTS ${s} CASCADE`);
+  await admin.close();
+});
 
 export interface WeekValues {
   /** [sessions, cv] per day for each segment. */
@@ -77,3 +112,12 @@ let cachedOntology: Ontology | null = null;
 export function ontology(): Ontology {
   return (cachedOntology ??= loadOntology());
 }
+
+/**
+ * A GSC Chart by Date covering the client GA4 test weeks (2026-09-10 – 09-23) with organic search clicks ↓
+ * and position worse in week 2, so the rule ① cause is determined and a countermeasure is proposed.
+ */
+export const weeksChart = () => ({
+  fileName: 'chart-by-date.csv',
+  buffer: gscDailyCsv('2026-09-10', [...Array.from({ length: 7 }, () => [100, 1000, 5] as [number, number, number]), ...Array.from({ length: 7 }, () => [70, 1000, 6] as [number, number, number])]),
+});

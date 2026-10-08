@@ -3,10 +3,14 @@ import { t } from '../i18n.ts';
 
 export interface Column<T> {
   key: string;
-  label: string;
+  label: ReactNode;
   num?: boolean;
+  /** Keep the column visible at the right edge while the table scrolls sideways (row actions). */
+  stickyEnd?: boolean;
   render: (row: T) => ReactNode;
 }
+
+const cls = <T,>(c: Column<T>) => [c.num ? 'num' : '', c.stickyEnd ? 'sticky-end' : ''].filter(Boolean).join(' ') || undefined;
 
 export function DataTable<T>({ columns, rows, rowKey, rowClass, onRowClick, selectedKey, empty }: {
   columns: Column<T>[];
@@ -22,7 +26,7 @@ export function DataTable<T>({ columns, rows, rowKey, rowClass, onRowClick, sele
     <div className="table-wrap">
       <table className="data">
         <thead>
-          <tr>{columns.map((c) => <th key={c.key} className={c.num ? 'num' : undefined}>{c.label}</th>)}</tr>
+          <tr>{columns.map((c) => <th key={c.key} className={cls(c)}>{c.label}</th>)}</tr>
         </thead>
         <tbody>
           {rows.map((r) => {
@@ -33,7 +37,7 @@ export function DataTable<T>({ columns, rows, rowKey, rowClass, onRowClick, sele
                 className={[rowClass?.(r), onRowClick ? 'clickable' : '', selectedKey === k ? 'selected' : ''].filter(Boolean).join(' ')}
                 onClick={onRowClick ? () => onRowClick(r) : undefined}
               >
-                {columns.map((c) => <td key={c.key} className={c.num ? 'num' : undefined}>{c.render(r)}</td>)}
+                {columns.map((c) => <td key={c.key} className={cls(c)}>{c.render(r)}</td>)}
               </tr>
             );
           })}

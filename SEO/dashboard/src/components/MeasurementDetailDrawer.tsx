@@ -6,10 +6,13 @@ import { CauseHypothesisPanel } from './CauseHypothesisPanel.tsx';
 import { CountermeasurePanel } from './CountermeasurePanel.tsx';
 import { readReviewer, saveReviewer } from './Decision.tsx';
 import { EvidencePanel } from './EvidencePanel.tsx';
+import { GscEvidencePanel } from './GscEvidencePanel.tsx';
+import { GscInvestigationPanel } from './GscInvestigationPanel.tsx';
 import { ErrorState, LoadingState } from './States.tsx';
 import { StatusBadge } from './StatusBadge.tsx';
 import { useApi } from './useApi.ts';
 import { t } from '../i18n.ts';
+import { dataLabel } from '../i18n.ts';
 
 export function MeasurementDetailDrawer({ id, onClose, onChanged }: { id: number; onClose: () => void; onChanged: () => void }) {
   const res = useApi<MeasurementDetail>(`/measurements/${id}`);
@@ -52,7 +55,7 @@ export function MeasurementDetailDrawer({ id, onClose, onChanged }: { id: number
                       <div className="small secondary">{t('Primary judgment: {text}', { text: d.rule.primaryJudgment })}</div>
                       <div className="small secondary">{t('What to check next: {text}', { text: d.rule.whatToCheckNext })}</div>
                     </dd>
-                    <dt>{t('Analysis unit')}</dt><dd>{d.measurement.subjectKey} ({d.measurement.subjectType})</dd>
+                    <dt>{t('Analysis unit')}</dt><dd>{d.measurement.analysisUnit} <span className="muted small">({dataLabel(d.measurement.subjectKey)})</span></dd>
                     <dt>{t('Metric')}</dt><dd>{metricLabel(d.measurement.metric)}</dd>
                     <dt>{t('Previous period')}</dt><dd>{period(d.run.previous)}</dd>
                     <dt>{t('Current period')}</dt><dd>{period(d.run.current)}</dd>
@@ -68,14 +71,19 @@ export function MeasurementDetailDrawer({ id, onClose, onChanged }: { id: number
                     </dd>
                     <dt>{t('Result')}</dt><dd><StatusBadge status={d.measurement.status} /> {d.measurement.result}</dd>
                     <dt>{t('Reason')}</dt><dd>{d.measurement.reason}</dd>
+                    <dt>{t('Status')}</dt>
+                    <dd>{d.measurement.status === 'NG' ? <strong>{t('Anomaly Detected')}</strong> : d.measurement.status === 'OK' ? t('No Anomaly') : t('No Anomaly (not evaluated)')}</dd>
                   </dl>
                   {d.measurement.status === 'NG' && <div className="small muted" style={{ marginTop: 8 }}>{t('NG means a significant business-rule change. It does not mean the uploaded file is invalid.')}</div>}
                 </div>
               </section>
+              {/* GA4 evidence → GSC supporting evidence → cause → countermeasure → anomaly decisions */}
               <EvidencePanel evidence={d.evidence} sources={d.sources} />
-              <AnomalyPanel anomaly={d.anomaly} run={d.run} reviewer={reviewer} onChanged={changed} />
+              {d.rule.metric === 'sessions' && <GscEvidencePanel detail={d} />}
+              {d.cause?.analysis?.investigation && <GscInvestigationPanel inv={d.cause.analysis.investigation} />}
               <CauseHypothesisPanel cause={d.cause} reviewer={reviewer} onChanged={changed} />
               <CountermeasurePanel cause={d.cause} countermeasures={d.countermeasures} reviewer={reviewer} onChanged={changed} />
+              <AnomalyPanel anomaly={d.anomaly} run={d.run} reviewer={reviewer} onChanged={changed} />
               {d.events.length > 0 && (
                 <section className="card">
                   <div className="card-head"><h2>{t('SEO team decisions')}</h2></div>

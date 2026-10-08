@@ -53,6 +53,7 @@ spec:
       nullable: false
       writableByActionRefs:
         - logos.seo.action.propose-countermeasure
+        - logos.seo.action.adjust-countermeasure
       sensitivity: internal
       sourceAuthority:
         authorityKind: internal
@@ -111,6 +112,7 @@ spec:
         - logos.seo.action.complete-countermeasure
         - logos.seo.action.verify-countermeasure-effective
         - logos.seo.action.verify-countermeasure-ineffective
+        - logos.seo.action.reject-countermeasure
       sensitivity: internal
       sourceAuthority:
         authorityKind: internal
@@ -146,6 +148,8 @@ spec:
         initial: true
         allowedActionRefs:
           - logos.seo.action.approve-countermeasure
+          - logos.seo.action.reject-countermeasure
+          - logos.seo.action.adjust-countermeasure
       - code: APPROVED
         displayName:
           en: Approved
@@ -190,11 +194,20 @@ spec:
           en: Outcome verified as not effective. Terminal.
         terminal: true
         citable: true
+      - code: REJECTED
+        displayName:
+          en: Rejected
+          ja: 却下
+        description:
+          en: The SEO team rejected the suggestion. Terminal; a new suggestion is a new countermeasure.
+        terminal: true
     transitions:
       - transitionId: approve
         fromState: PROPOSED
         toState: APPROVED
         actionRef: logos.seo.action.approve-countermeasure
+        guards:
+          - context.causeReviewStatus == 'CONFIRMED'
       - transitionId: start
         fromState: APPROVED
         toState: IN_PROGRESS
@@ -211,6 +224,10 @@ spec:
         fromState: COMPLETED
         toState: VERIFIED_INEFFECTIVE
         actionRef: logos.seo.action.verify-countermeasure-ineffective
+      - transitionId: reject
+        fromState: PROPOSED
+        toState: REJECTED
+        actionRef: logos.seo.action.reject-countermeasure
     deletionMode: archive
   sourceAuthorityDefault:
     authorityKind: internal

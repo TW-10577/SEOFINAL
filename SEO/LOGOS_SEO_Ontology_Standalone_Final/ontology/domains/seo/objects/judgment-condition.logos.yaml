@@ -8,7 +8,7 @@ metadata:
     ja: 判定条件
   description:
     en: A business rule that decides whether a change is significant. Thresholds are supplied or approved by the SEO team;
-      the PoC conditions are the client rules ① and ② in SEO.txt, configured in config/rules.yaml.
+      the PoC conditions are the client rules ① and ② in SEO.txt, configured in rules.yaml.
   version: 0.0.1
   owner:
     ownerId: team:logos-seo
@@ -29,7 +29,7 @@ spec:
         en: Condition ID
         ja: 条件 ID
       description:
-        en: Identifier from the rule configuration (config/rules.yaml), e.g. GA4-R1.
+        en: Identifier from the rule configuration (rules.yaml), e.g. GA4-R1.
       valueTypeRef: logos.seo.value.seo-string
       valueMode: stored
       required: true

@@ -53,6 +53,7 @@ spec:
       nullable: false
       writableByActionRefs:
         - logos.seo.action.propose-cause-hypothesis
+        - logos.seo.action.amend-cause-hypothesis
       sensitivity: internal
       sourceAuthority:
         authorityKind: internal
@@ -130,6 +131,7 @@ spec:
           - logos.seo.action.confirm-cause
           - logos.seo.action.reject-cause
           - logos.seo.action.request-more-evidence
+          - logos.seo.action.amend-cause-hypothesis
       - code: NEEDS_MORE_EVIDENCE
         displayName:
           en: Needs More Evidence
@@ -139,6 +141,7 @@ spec:
         allowedActionRefs:
           - logos.seo.action.confirm-cause-after-evidence
           - logos.seo.action.reject-cause-after-evidence
+          - logos.seo.action.amend-cause-hypothesis
       - code: CONFIRMED
         displayName:
           en: Confirmed

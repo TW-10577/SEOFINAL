@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { useMemo, useRef, useState } from 'react';
 import { compact, num } from '../format.ts';
 import { t } from '../i18n.ts';
+import { dataLabel } from '../i18n.ts';
 
 /** Categorical slots in fixed order (validated palette). Assign by entity, never by rank. */
 export const SERIES_COLORS = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--series-4)', 'var(--series-5)', 'var(--series-6)'];
@@ -40,7 +41,7 @@ export function ChartCard({ title, subtitle, legend, table, children }: {
         {legend && legend.length > 1 && !showTable && (
           <div className="legend">
             {legend.map((l) => (
-              <span key={l.label}><span className="key" style={{ background: l.color }} />{l.label}</span>
+              <span key={l.label}><span className="key" style={{ background: l.color }} />{dataLabel(l.label)}</span>
             ))}
           </div>
         )}
@@ -67,13 +68,16 @@ function niceTicks(min: number, max: number, count = 4): number[] {
   return out;
 }
 
-export function LineChart({ series, format = (v) => num(v), zeroBased = true, invert = false }: {
+export function LineChart({ series, format = (v) => num(v), zeroBased = true, invert = false, width = W }: {
   series: ChartSeries[];
   format?: (v: number) => string;
   zeroBased?: boolean;
   /** For position: lower is better, drawn at the top. */
   invert?: boolean;
+  /** viewBox width: a full-width chart uses a wider box so it keeps the height of a half-width one. */
+  width?: number;
 }) {
+  const W = width;
   const ref = useRef<SVGSVGElement>(null);
   const [hover, setHover] = useState<number | null>(null);
   const dates = useMemo(() => [...new Set(series.flatMap((s) => s.points.map((p) => p.date)))].sort(), [series]);
@@ -128,7 +132,7 @@ export function LineChart({ series, format = (v) => num(v), zeroBased = true, in
             <line x1={x(hover)} x2={x(hover)} y1={M.top} y2={M.top + ih} stroke="var(--text-muted)" strokeWidth={1} />
             {series.map((s) => {
               const p = s.points.find((q) => q.date === dates[hover]);
-              return p ? <circle key={s.key} cx={x(hover)} cy={y(p.value)} r={4} fill={s.color} stroke="var(--surface-1)" strokeWidth={2} /> : null;
+              return p ? <circle key={s.key} cx={x(hover)} cy={y(p.value)} r={4} fill={s.color} stroke="var(--surface)" strokeWidth={2} /> : null;
             })}
           </g>
         )}
@@ -140,7 +144,7 @@ export function LineChart({ series, format = (v) => num(v), zeroBased = true, in
             const p = s.points.find((q) => q.date === dates[hover]);
             return (
               <div key={s.key} className="t-row">
-                <span><span className="dot" style={{ background: s.color }} /> {s.label}</span>
+                <span><span className="dot" style={{ background: s.color }} /> {dataLabel(s.label)}</span>
                 <strong>{p ? format(p.value) : '—'}</strong>
               </div>
             );
@@ -157,7 +161,7 @@ export function SeriesTable({ series, format = (v) => num(v) }: { series: ChartS
     <div className="table-wrap">
       <table className="data">
         <thead>
-          <tr><th>{t('Date')}</th>{series.map((s) => <th key={s.key} className="num">{s.label}</th>)}</tr>
+          <tr><th>{t('Date')}</th>{series.map((s) => <th key={s.key} className="num">{dataLabel(s.label)}</th>)}</tr>
         </thead>
         <tbody>
           {dates.map((d) => (
@@ -198,7 +202,8 @@ export function BarChart({ rows, format = (v) => num(v), color = 'var(--series-1
         {rows.map((r, i) => {
           const y0 = i * (bar + gap);
           const bw = Math.max(2, (r.value / max) * plotW);
-          const label = r.label.length > 42 ? `${r.label.slice(0, 40)}…` : r.label;
+          const shown = dataLabel(r.label);
+          const label = shown.length > 42 ? `${shown.slice(0, 40)}…` : shown;
           return (
             <g key={r.label} onMouseEnter={() => setHover(i)}>
               <rect x={0} y={y0 - gap / 2} width={w} height={bar + gap} fill="transparent" />
@@ -211,7 +216,7 @@ export function BarChart({ rows, format = (v) => num(v), color = 'var(--series-1
       </svg>
       {hover !== null && (
         <div className="tooltip" style={{ left: '40%', top: `${(((hover + 1) * (bar + gap)) / h) * 100}%` }}>
-          <div style={{ wordBreak: 'break-all' }}><strong>{rows[hover]!.label}</strong></div>
+          <div style={{ wordBreak: 'break-all' }}><strong>{dataLabel(rows[hover]!.label)}</strong></div>
           <div className="t-row"><span>{t('Value')}</span><strong>{format(rows[hover]!.value)}</strong></div>
           {rows[hover]!.detail && <div className="small secondary">{rows[hover]!.detail}</div>}
         </div>

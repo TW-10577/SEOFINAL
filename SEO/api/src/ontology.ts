@@ -36,6 +36,34 @@ export interface Transition {
   actionId: string;
   actionApiName: string;
   actionLabel: LText;
+  /** LOGOS guards (LIF-10): conditions on context facts that must hold before the transition runs. */
+  guards: Guard[];
+}
+
+/** A guard of the form `context.<fact> == <literal>` (or !=), parsed from the YAML. */
+export interface Guard {
+  text: string;
+  fact: string;
+  op: '==' | '!=';
+  value: string | number | boolean | null;
+}
+
+const GUARD = /^context\.([A-Za-z][A-Za-z0-9]*)\s*(==|!=)\s*('([^']*)'|"([^"]*)"|true|false|null|-?\d+(?:\.\d+)?)$/;
+
+/** Parses the guard forms the SEO system can evaluate; anything else stops startup rather than being ignored. */
+export function parseGuard(text: string, where: string): Guard {
+  const m = GUARD.exec(text.trim());
+  if (!m) throw new OntologyError(`${where}: guard "${text}" is not supported (expected context.<fact> == <literal>).`);
+  const lit = m[3]!;
+  const value = m[4] ?? m[5] ?? (lit === 'true' ? true : lit === 'false' ? false : lit === 'null' ? null : Number(lit));
+  return { text, fact: m[1]!, op: m[2] as Guard['op'], value };
+}
+
+/** True when the guard holds for the given context facts (a missing fact never satisfies a guard). */
+export function guardHolds(g: Guard, context: Record<string, unknown>): boolean {
+  if (!(g.fact in context)) return false;
+  const eq = context[g.fact] === g.value;
+  return g.op === '==' ? eq : !eq;
 }
 
 export interface Lifecycle {
@@ -46,6 +74,8 @@ export interface Lifecycle {
   initial: string;
   terminal: string[];
   transitions: Transition[];
+  /** Action ids allowed in each state (allowedActionRefs), by state apiName. */
+  allowed: Record<string, string[]>;
 }
 
 export interface Ontology {
@@ -131,7 +161,8 @@ export function loadOntology(dir = process.env.SEO_ONTOLOGY_DIR ?? DEFAULT_ONTOL
       if (!action || action.kind !== 'ActionType') throw new OntologyError(`${d.id}: transition ${t.transitionId} references missing action ${t.actionRef}.`);
       const bound = (action.spec.effects ?? []).some((e: Raw) => e.effectKind === 'lifecycle_transition' && e.lifecycleTransitionRef === `#transition/${t.transitionId}`);
       if (!bound) throw new OntologyError(`${t.actionRef}: has no lifecycle_transition effect for #transition/${t.transitionId} (LIF-07).`);
-      return { id: t.transitionId, from: apiOf(t.fromState), to: apiOf(t.toState), actionId: action.id, actionApiName: action.apiName, actionLabel: action.displayName };
+      const guards = ((t.guards ?? []) as string[]).map((g) => parseGuard(g, `${d.id} #transition/${t.transitionId}`));
+      return { id: t.transitionId, from: apiOf(t.fromState), to: apiOf(t.toState), actionId: action.id, actionApiName: action.apiName, actionLabel: action.displayName, guards };
     });
     lifecycles.set(d.apiName, {
       objectId: d.id,
@@ -140,6 +171,7 @@ export function loadOntology(dir = process.env.SEO_ONTOLOGY_DIR ?? DEFAULT_ONTOL
       states,
       initial: apiOf(initial[0]!.code),
       terminal: (lc.states as Raw[]).filter((s) => s.terminal).map((s) => apiOf(s.code)),
+      allowed: Object.fromEntries((lc.states as Raw[]).map((s) => [apiOf(s.code), (s.allowedActionRefs ?? []) as string[]])),
       transitions,
     });
   }
@@ -168,6 +200,9 @@ export const VT = {
   dataSource: 'logos.seo.value.data-source',
 } as const;
 
+/** Edit actions the API offers, keyed by entity. */
+export const EDIT_ACTIONS = { cause: 'logos.seo.action.amend-cause-hypothesis', countermeasure: 'logos.seo.action.adjust-countermeasure' } as const;
+
 const REQUIRED_OBJECTS = ['Site', 'SearchQuery', 'Page', 'QueryClassification', 'TrafficSource', 'AnalysisPeriod', 'SEOData', 'JudgmentCondition', 'SEOAnomaly', 'CauseHypothesis', 'Countermeasure'];
 
 function requireContract(o: Ontology) {
@@ -176,6 +211,8 @@ function requireContract(o: Ontology) {
   if (missing.length) throw new OntologyError(`Ontology is missing objects the system uses: ${missing.join(', ')}`);
   for (const name of Object.values(GOVERNED)) if (!o.lifecycles.has(name)) throw new OntologyError(`Ontology object ${name} has no lifecycle.`);
   for (const id of Object.values(VT)) if (!o.vocabularies.has(id)) throw new OntologyError(`Ontology is missing vocabulary ${id}.`);
+  // SEO team edits that are not state changes (modify the cause / adjust the countermeasure).
+  for (const id of Object.values(EDIT_ACTIONS)) if (o.definitions.get(id)?.kind !== 'ActionType') throw new OntologyError(`Ontology is missing action ${id}.`);
   const expectInitial: Record<string, string> = { SEOAnomaly: 'Detected', CauseHypothesis: 'NotReviewed', Countermeasure: 'Proposed' };
   for (const [obj, state] of Object.entries(expectInitial))
     if (o.lifecycles.get(obj)!.initial !== state)
@@ -189,6 +226,14 @@ export function lifecycleOf(o: Ontology, entity: GovernedEntity): Lifecycle {
 /** Transitions available from `state` for the entity, as declared in the ontology. */
 export function nextTransitions(o: Ontology, entity: GovernedEntity, state: string): Transition[] {
   return lifecycleOf(o, entity).transitions.filter((t) => t.from === state);
+}
+
+/** Vocabulary code (e.g. CONFIRMED) of a state stored by its apiName (e.g. Confirmed). */
+export function stateCode(o: Ontology, entity: GovernedEntity, apiName: string): string | null {
+  const lc = lifecycleOf(o, entity);
+  const def = o.definitions.get(lc.objectId)!;
+  const prop = (def.spec.properties ?? []).find((p: Raw) => p.memberId === lc.stateProperty);
+  return vocabulary(o, prop?.valueTypeRef).find((v) => v.apiName === apiName)?.code ?? null;
 }
 
 export function vocabulary(o: Ontology, valueTypeId: string): VocabularyValue[] {

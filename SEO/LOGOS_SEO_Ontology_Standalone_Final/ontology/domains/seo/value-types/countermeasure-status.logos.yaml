@@ -65,3 +65,11 @@ spec:
       description:
         en: The outcome was verified as not effective.
       ordinal: 60
+    - code: REJECTED
+      apiName: Rejected
+      displayName:
+        en: Rejected
+        ja: 却下
+      description:
+        en: The SEO team rejected the suggested action; it is not carried out.
+      ordinal: 70

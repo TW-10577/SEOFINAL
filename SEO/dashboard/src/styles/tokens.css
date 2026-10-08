@@ -1,0 +1,133 @@
+/* Design tokens. Change the theme here; components only use these variables. */
+:root {
+  color-scheme: light;
+
+  /* Brand — deep green */
+  --brand-950: #0f2823;
+  --brand-900: #12302a; /* header */
+  --brand-700: #1f5a45; /* primary */
+  --brand-800: #184a39; /* primary hover / pressed */
+  --brand-500: #3d8a6c;
+  --brand-100: #d7e9e0;
+  --brand-50: #ebf4ef; /* selected rows, active nav */
+
+  /* Neutrals (grey-green) */
+  --bg: #f4f6f3;
+  --surface: #ffffff;
+  --surface-2: #f7f9f7; /* table header, insets */
+  --surface-3: #eef2ef;
+  --border: #e5e9e6;
+  --border-strong: #d3d9d5;
+  --grid: #edf0ee;
+  --text-primary: #17201c;
+  --text-secondary: #4a5550;
+  --text-muted: #67716c; /* ≥ 4.5:1 on white */
+  --text-on-brand: #ffffff;
+  --header-sub: #a9cfbf;
+
+  /* Semantic */
+  --good: #1d6b3d;
+  --good-soft: #e3f2e8;
+  --warning: #8a5a00;
+  --warning-soft: #fdf2d8;
+  --critical: #b42318;
+  --critical-soft: #fdecea;
+  --neutral: #55605b;
+  --neutral-soft: #eef1ef;
+  --info: var(--brand-700);
+  --info-soft: var(--brand-50);
+
+  /* Chart series */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --series-5: #e87ba4;
+  --series-6: #008300;
+
+  /* Spacing — 4px grid */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+
+  /* Radius */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-pill: 999px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 16px rgba(16, 40, 34, 0.08), 0 1px 3px rgba(16, 40, 34, 0.06);
+  --shadow-lg: 0 16px 40px rgba(16, 40, 34, 0.16);
+  --focus-ring: 0 0 0 3px rgba(31, 90, 69, 0.28);
+
+  /* Typography */
+  --font-sans: 'Source Sans 3', 'Noto Sans JP', 'Segoe UI', system-ui, sans-serif;
+  --font-serif: 'Libre Baskerville', Georgia, 'Times New Roman', serif; /* wordmark and page titles */
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  --text-xs: 12px; /* captions */
+  --text-sm: 14px; /* tables */
+  --text-base: 15px; /* body */
+  --text-md: 16px;
+  --text-lg: 18px; /* section titles */
+  --text-xl: 22px;
+  --text-2xl: 28px; /* page title */
+  --leading: 1.5;
+  --tracking-caps: 0.08em;
+
+  /* Sizes */
+  --header-h: 56px;
+  --sidebar-w: 240px;
+  --sidebar-rail: 64px;
+  --control-h: 36px;
+  --control-h-sm: 28px;
+  --content-max: 1440px;
+
+  /* Motion */
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --dur: 160ms;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --brand-900: #0b1d19;
+    --brand-700: #3f9a78;
+    --brand-800: #4fae8a;
+    --brand-100: #1f3a31;
+    --brand-50: #172b24;
+    --bg: #0f1412;
+    --surface: #161d1a;
+    --surface-2: #1b2420;
+    --surface-3: #212b27;
+    --border: #2a3530;
+    --border-strong: #35423c;
+    --grid: #222c28;
+    --text-primary: #eef3f0;
+    --text-secondary: #bcc6c1;
+    --text-muted: #94a09a;
+    --header-sub: #8fbfae;
+    --good: #5cc287;
+    --good-soft: #15291c;
+    --warning: #e2b14d;
+    --warning-soft: #30260f;
+    --critical: #f2817a;
+    --critical-soft: #36191a;
+    --neutral: #b5bfba;
+    --neutral-soft: #222b27;
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+    --series-5: #d55181;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.35);
+    --focus-ring: 0 0 0 3px rgba(79, 174, 138, 0.4);
+  }
+}

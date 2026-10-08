@@ -1,3 +1,5 @@
+import { translateDataTerms } from '@seo/shared';
+
 // Bilingual server text. Generated messages are built as { en, ja } and stored as JSON in TEXT
 // columns (or inside evidence JSON); responses are localized to the requested language at the edge.
 export type Lang = 'en' | 'ja';
@@ -39,15 +41,17 @@ export function dec(v: string | LText | null | undefined): LText {
   return tx(v);
 }
 
+/** The text in `lang`; English text also gets English names for the client's Japanese data terms. */
 export function loc(v: string | LText | null | undefined, lang: Lang): string {
-  return dec(v)[lang];
+  const t = dec(v);
+  return lang === 'en' ? translateDataTerms(t.en, false) : t.ja;
 }
 
 /** Deep-localizes a response: every { en, ja } object or encoded string becomes the chosen language. */
 export function localize<T>(v: T, lang: Lang): T {
   if (typeof v === 'string') return (v.startsWith('{"en":') ? loc(v, lang) : v) as T;
   if (Array.isArray(v)) return v.map((x) => localize(x, lang)) as T;
-  if (isLText(v)) return v[lang] as T;
+  if (isLText(v)) return loc(v, lang) as T;
   if (v && typeof v === 'object') {
     const out: Record<string, unknown> = {};
     for (const [k, x] of Object.entries(v)) out[k] = localize(x, lang);

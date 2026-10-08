@@ -4,21 +4,22 @@ Semantic sources: `LOGOS_SEO_Ontology_Design.md_.md`, `LOGOS_SEO_Workflow_Design
 judgment rules in `SEO.txt`. Structure: the LOGOS repository (D2 Ontology Modeling Spec, `spec/kinds`).
 
 **Status:** compiles with the official LOGOS compiler: all passes and the release closure, 0 diagnostics,
-112 definitions. Check it with `npm run ontology:check` from `SEO/`.
+115 definitions. Check it with `npm run ontology:check` from `SEO/`.
 
 The SEO system (`SEO/api`) loads this folder at startup and runs on it (see "How the SEO system uses it").
-Every `*.logos.yaml` here is loaded; the only other YAML the system reads is `SEO/config/rules.yaml`.
+Every `*.logos.yaml` under `ontology/` is loaded, plus `rules.yaml` in this folder: all the YAML the system reads is here.
 
 ## Layout
 
 ```
+rules.yaml                                client rules ① ② (the JudgmentCondition values), thresholds, GA4/GSC mappings
 ontology/
   root/package.logos.yaml                 release root (assembles the closure; no business semantics)
   domains/seo/
     package.logos.yaml, domain.logos.yaml
     objects/          11   O1–O10 + Site
     relations/        20   R1–R13 (R8 / R13 split per subject type) + Site HAS SEO Data
-    actions/          22   A1–A7, A9 + A8 as one governed action per lifecycle transition
+    actions/          25   A1–A7, A9 + A8 as one governed action per lifecycle transition, plus Modify cause / Adjust countermeasure
     functions/         5   DetectSignificantChange, IsChangeSignificant, SuggestCause, RequiresHumanReview, ComputeCVR
     value-types/      41   every value type in design §9 + the vocabularies the rules need
     policies/          7   authorization (upload / system / SEO team review / reader), retention, model usage
@@ -94,11 +95,24 @@ duties, and it requires a decision record. The agent mode is `deny` for review a
 - **SuggestCause stays `model_based`,** as in design A6. The PoC implementation applies the client rules
   deterministically ("rules first") and records the same evidence.
 
+## Differences from LOGOS_SEO_Ontology_Design.md — need design approval
+
+The design document was not changed. These additions are in the YAML and need the design owner's approval
+(or a design update):
+
+| Addition | Why |
+|---|---|
+| Object **Site**; DETECTED_ON / APPLIED_TO to **Site** and **Traffic Source**; Site HAS SEO Data | Both client rules judge the site total and traffic channels, which R8 / R13 (Search Query / Page only) cannot express. |
+| Countermeasure state **Rejected** + action `reject-countermeasure` | Design H2 "approve, adjust or **dismiss**" the countermeasure; §8 has no state for a dismissed suggestion. |
+| Cause review **NeedsMoreEvidence → Confirmed / Rejected** | §8 lists NeedsMoreEvidence but no way out of it. |
+| Actions `amend-cause-hypothesis`, `adjust-countermeasure` (no state change) | Workflow step 10 "confirm, reject or **modify** the cause"; A8 "approve, **adjust** or dismiss". |
+| Transition **guards**: approve only when `context.causeReviewStatus == 'CONFIRMED'`; assign only when `context.hasApprovedCountermeasure == true` | R12 "the action answers the **confirmed** cause". LOGOS expressions cannot traverse relations, so the API supplies these `context` facts. |
+
 ## Still to confirm with the client (marked `logos.ext/confirmation-status: unconfirmed`)
 
 - GA4 segments: 通販（全体） = site total, オーガニックサーチ = organic, ペイド系合算 = paid / advertising
 - CV column (e コマース購入数 or トランザクション); the brand classification rule
-- The rule ② threshold unit and the definition of "flat" (configured in `config/rules.yaml`)
+- The rule ② threshold unit and the definition of "flat" (configured in `rules.yaml`)
 - Retention periods for audit and evidence
 
 ## How the SEO system uses it
@@ -107,9 +121,11 @@ duties, and it requires a decision record. The agent mode is `deny` for review a
   - a required object, lifecycle or vocabulary is missing
   - a transition's action does not perform it
   - an initial state differs from what the system creates
-  - a judgment condition in `config/rules.yaml` uses a unit, direction or type outside the vocabularies
+  - a judgment condition in `rules.yaml` uses a unit, direction or type outside the vocabularies
 - SEO team decisions (`POST /api/anomalies/:id/state`, `/api/causes/:id/review`,
-  `/api/countermeasures/:id/status`) are checked against these lifecycles. The detail drawer shows one
+  `/api/countermeasures/:id/status`) are checked against these lifecycles and their `guards`.
+  Modify / Adjust (`POST /api/causes/:id/amend`, `/api/countermeasures/:id/adjust`) are allowed only in
+  the states whose `allowedActionRefs` list the action. The detail drawer shows one
   button per allowed transition, labelled with the action's name, e.g. 異常のトリアージ.
 - `GET /api/ontology` returns the objects, lifecycles, vocabularies, relations and actions (en / ja).
 - `api/test/ontology.test.ts` checks that the database status columns, measurement results, subject

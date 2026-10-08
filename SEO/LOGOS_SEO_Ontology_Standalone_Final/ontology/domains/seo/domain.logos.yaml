@@ -21,7 +21,7 @@ spec:
   namespace: seo
   domainKind: business
   businessScope:
-    en: "In scope: CSV/Excel ingestion of GA4 and Search Console exports, validation and standardization, week-on-week
+    en: "In scope: file upload of GA4 and Search Console exports (CSV, TSV, TXT, Excel, JSON, XML, HTML, PDF, Word or a ZIP of these; format detected from contents), validation and standardization, week-on-week
       comparison, significant-change detection against SEO-team-approved judgment conditions, SEO anomaly registration,
       possible-cause suggestion, countermeasure proposal, dashboard/report generation and weekly monitoring. Out of
       scope: direct GA4 / Search Console API connections, competitor crawling and scoring, automatic website updates,

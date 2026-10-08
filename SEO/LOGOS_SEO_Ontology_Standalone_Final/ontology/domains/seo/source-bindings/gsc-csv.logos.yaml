@@ -4,7 +4,7 @@ metadata:
   id: logos.seo.binding.gsc-csv
   apiName: SearchConsolePerformanceExport
   displayName:
-    en: Search Console Performance Export (CSV/Excel)
+    en: Search Console Performance Export (file upload)
     ja: Search Console 検索パフォーマンス エクスポート
   description:
     en: "Search Console Performance export: one tab per dimension (クエリ, ページ, 日付, デバイス, 国, 検索での見え方) plus フィルタ (export

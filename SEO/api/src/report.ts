@@ -1,22 +1,19 @@
-// Weekly monitoring report (TXT), generated from database records of one measurement run.
-// The report is a generated view: it is stored only so that a download matches its preview.
-import type { EvidenceTable, Report } from '@seo/shared';
-import { unresolvedItems, type AppConfig } from './config.ts';
-import { nowIso, parseJson, type DB } from './db.ts';
-import { loc, localize, tx, type Lang, type LText } from './i18n.ts';
+// Weekly SEO report: a short business summary of one measurement run, built from its stored results.
+// The report is a generated view (ontology: not a persistent object); it is rebuilt on every request.
+import type { CauseAnalysis as CauseHypothesisAnalysis, GscInvestigation, GscSnapshot, Report, ReportBlock, ReportDoc } from '@seo/shared';
+import type { AppConfig } from './config.ts';
+import { nowIso, type DB } from './db.ts';
+import { localize, tx, type Lang, type LText } from './i18n.ts';
+import { translateDataTerms } from '@seo/shared';
 import { fmtNum, fmtPct } from './measure/logic.ts';
 import {
   getCause,
   getRun,
-  listAnalysisResults,
   listAnomalies,
   listCountermeasures,
   listMeasurements,
-  sourceRefs,
-  toEvent,
 } from './measure/read.ts';
 
-type Row = Record<string, any>;
 
 const METRIC_LABEL: Record<string, LText> = {
   sessions: tx('Sessions', 'セッション'),
@@ -37,219 +34,364 @@ const STATE_JA: Record<string, string> = {
   percent: '%（相対）', percentage_points: 'パーセントポイント', unresolved: '未解決',
 };
 
-export function generateReport(db: DB, cfg: AppConfig, runId: number, lang: Lang = 'en'): Report {
-  const content = buildReportText(db, cfg, runId, lang);
+/** Builds the report from the database on request; nothing is stored (a report is a generated view). */
+export async function generateReport(db: DB, cfg: AppConfig, runId: number, lang: Lang = 'en'): Promise<Report> {
+  const doc = await buildReportDoc(db, cfg, runId, lang);
   const generatedAt = nowIso();
-  const fileName = `LOGOS_SEO_Report_${generatedAt.slice(0, 10)}.txt`;
-  const id = Number(db.prepare('INSERT INTO reports (run_id, file_name, content, generated_at) VALUES (?, ?, ?, ?)').run(runId, fileName, content, generatedAt).lastInsertRowid);
-  return { id, runId, fileName, generatedAt, content };
+  return { runId, fileName: `LOGOS_SEO_Report_${generatedAt.slice(0, 10)}.txt`, generatedAt, content: renderText(doc), doc };
 }
 
-export function getReport(db: DB, id: number): Report | null {
-  const r = db.prepare('SELECT * FROM reports WHERE id = ?').get(id) as Row | undefined;
-  return r ? { id: r.id, runId: r.run_id, fileName: r.file_name, generatedAt: r.generated_at, content: r.content } : null;
+export async function buildReportText(db: DB, cfg: AppConfig, runId: number, lang: Lang = 'en'): Promise<string> {
+  return renderText(await buildReportDoc(db, cfg, runId, lang));
 }
 
-export function buildReportText(db: DB, cfg: AppConfig, runId: number, lang: Lang = 'en'): string {
-  const run = localize(getRun(db, runId), lang);
+/**
+ * The business report: short and readable, built only from the run's stored results (no second calculation).
+ * Analysis Summary → Measurement Summary (M1/M2) → Anomaly (if NG) → Supporting Evidence (M1 NG + organic ↓)
+ * → Cause → Countermeasure. Raw data, calculation tables and decision logs stay on the Data / Measurements pages.
+ */
+export async function buildReportDoc(db: DB, cfg: AppConfig, runId: number, lang: Lang = 'en'): Promise<ReportDoc> {
+  const run = localize(await getRun(db, runId), lang);
   if (!run) throw new Error(`Measurement run ${runId} not found.`);
   const L = (en: string, ja: string) => (lang === 'ja' ? ja : en);
   const S = (v: string) => (lang === 'ja' ? (STATE_JA[v] ?? v) : v);
-  const M = (m: string) => METRIC_LABEL[m]?.[lang] ?? m;
-  const measurements = localize(listMeasurements(db, cfg, runId), lang);
-  const results = localize(listAnalysisResults(db, runId), lang);
-  const anomalies = listAnomalies(db, runId);
-  const out: string[] = [];
-  const h = (n: number, en: string, ja: string) => out.push('', `${n}. ${L(en.toUpperCase(), ja)}`, '-'.repeat(78));
-  const kv = (label: string, value: string) => `${pad(label, 19)}: ${value}`;
+  const RESULT = (s: string) => (s === 'NOT_EVALUABLE' ? L('NOT EVALUABLE', '評価不可') : s);
+  const measurements = localize(await listMeasurements(db, cfg, runId), lang);
+  const doc: ReportDoc = { title: L('LOGOS SEO Weekly Report', 'LOGOS SEO 週次レポート'), sections: [] };
+  let n = 0;
+  let cur: ReportBlock[] = [];
+  const section = (en: string, ja: string) => {
+    cur = [];
+    doc.sections.push({ n: ++n, title: L(en, ja), blocks: cur });
+  };
+  const add = (...b: ReportBlock[]) => cur.push(...b);
+  const p = (text: string, tone?: 'muted' | 'warn'): ReportBlock => ({ t: 'p', text, tone });
+  // Results labelled TEST DATA: the explanation is said once (in the summary), not in every reason.
+  const testData = measurements.some((m) => m.dataKind === 'test');
+  const clean = (reason: string) => reason.replace(/^Based on data the export marks as not real — not a business result\.\s*/, '').replace(/^エクスポートで実データではないとされたデータに基づく結果です — 業務上の結果ではありません。/, '');
+  const changeText = (m: (typeof measurements)[number]) =>
+    m.changeRate === null ? '—' : m.metric === 'cvr' && m.absoluteChange !== null ? `${fmtPct(m.changeRate)} (${m.absoluteChange > 0 ? '+' : ''}${m.absoluteChange.toFixed(3)} pt)` : fmtPct(m.changeRate);
+  const thresholdText = (m: (typeof measurements)[number]) =>
+    m.thresholdValue === null
+      ? L('not configured', '未設定')
+      : m.thresholdUnit === 'percent'
+        ? `±${m.thresholdValue}%`
+        : m.thresholdUnit === 'percentage_points'
+          ? `±${m.thresholdValue} pt`
+          : `±${m.thresholdValue}% ${L('(unit pending)', '（単位確認待ち）')}`;
+  /** Why a rule could not be evaluated, in one line. */
+  const notEvaluableReason = (m: (typeof measurements)[number]) =>
+    m.thresholdUnit === 'unresolved'
+      ? L('The client has not confirmed whether the threshold is a relative % or percentage points.', '閾値が相対 % かパーセントポイントかがクライアント未確認です。')
+      : clean(m.reason).split(/(?<=[.。])\s/)[0]!;
+  const short = (m: (typeof measurements)[number]) => m.name.replace(/^[①②③④⑤]\s*/, '').split(' — ')[0]!;
 
-  out.push('='.repeat(78), L('LOGOS SEO PAGE PERFORMANCE ANALYSIS — WEEKLY MONITORING REPORT', 'LOGOS SEO ページパフォーマンス分析 — 週次モニタリングレポート'), '='.repeat(78));
+  // Direction of the judged change: an increase is a positive change, never shown as a problem.
+  const positive = (m: (typeof measurements)[number]) => (m.changeRate ?? m.absoluteChange ?? 0) > 0;
+  const kind = (m: (typeof measurements)[number]) =>
+    m.status !== 'NG' ? '' : positive(m) ? L('Significant Positive Change', '有意なプラスの変化') : L('Significant Negative Change', '有意なマイナスの変化');
+  const resultText = (m: (typeof measurements)[number]) => (m.status === 'NG' ? `NG — ${kind(m)}` : RESULT(m.status));
 
-  h(1, 'Report information', 'レポート情報');
-  out.push(
-    kv(L('Generated at', '生成日時'), nowIso()),
-    kv(L('Measurement run', '測定実行'), `#${run.id} (${L('run at', '実行')} ${run.createdAt})`),
-    kv(L('Generated from', '生成元'), L('LOGOS SEO PoC database records', 'LOGOS SEO PoC のデータベースレコード')),
-    kv(L('Decision boundary', '判断の範囲'), L('The system suggests possible causes and countermeasures. The SEO team', 'システムは可能性のある原因と対策を提案します。SEO チームが')),
-    `${' '.repeat(21)}${L('reviews, confirms or rejects them and decides the action.', '内容を確認・承認・却下し、対応を決定します。')}`,
+  // ---- facts for the header and executive summary ----
+  const ng = measurements.filter((m) => m.status === 'NG');
+  const ok = measurements.filter((m) => m.status === 'OK');
+  const ne = measurements.filter((m) => m.status === 'NOT_EVALUABLE');
+  const overall = ng.length ? 'NG' : ok.length ? 'OK' : 'NOT_EVALUABLE';
+  const overallNote = ng.length
+    ? L(`${ng.length} significant change(s) detected.`, `有意な変化を ${ng.length} 件検知しました。`)
+    : overall === 'OK'
+      ? ne.length
+        ? L('No significant change detected; some rules could not be evaluated.', '有意な変化はありません。一部のルールは評価できませんでした。')
+        : L('No significant change detected.', '有意な変化はありません。')
+      : L('The rules could not be evaluated.', 'ルールを評価できませんでした。');
+  // Distinct (file, source) pairs in upload order.
+  const used = await db.all<{ f: string; s: string }>(
+    `SELECT u.file_name AS f, u.source AS s FROM measurement_sources ms JOIN measurements m ON m.id = ms.measurement_id JOIN imported_data d ON d.id = ms.imported_data_id
+     JOIN uploads u ON u.id = d.upload_id WHERE m.run_id = ? GROUP BY u.file_name, u.source ORDER BY MIN(u.id)`,
+    runId,
   );
-
-  h(2, 'Analysis period', '分析期間');
-  out.push(
-    kv(L('Current period', '今期'), `${run.current.start} – ${run.current.end}`),
-    kv(L('Previous period', '前期'), `${run.previous.start} – ${run.previous.end}`),
-    kv(L('Comparison', '比較'), L('Week on week (WoW)', '前週比')),
-  );
-
-  h(3, 'Data source', 'データソース');
-  const uploadIds = new Set<number>();
-  for (const m of measurements) for (const r of sourceRefs(db, m.id)) uploadIds.add(r.uploadId);
-  const uploads = uploadIds.size
-    ? (db.prepare(`SELECT * FROM uploads WHERE id IN (${[...uploadIds].map(() => '?').join(',')}) ORDER BY id`).all(...uploadIds) as Row[])
-    : [];
-  if (!uploads.length) out.push(L('No source data was used by this run.', 'この実行で使用したソースデータはありません。'));
-  out.push(
-    ...table(
-      [L('Upload', 'アップロード'), L('Source', 'ソース'), L('File', 'ファイル'), L('Structure', '構造'), L('Period', '期間'), L('Validation', '検証')],
-      uploads.map((u) => [`#${u.id}`, u.source, u.file_name, u.structure, u.analysis_period_start ? `${u.analysis_period_start} – ${u.analysis_period_end}` : L('unknown', '不明'), S(u.validation_status)]),
-    ),
-  );
-  out.push('', L('Source mappings used:', '使用した対応付け：'));
-  const roleJa: Record<string, string> = { total: '全体', organic: 'オーガニック流入', advertising: '広告流入' };
-  const unconfirmed = L(' (not confirmed by the client)', '（クライアント未確認）');
-  for (const [role, m] of Object.entries(cfg.segments))
-    out.push(`  - ${L(`${role} traffic = GA4 segment "${m.value}"`, `${roleJa[role]} = GA4 セグメント「${m.value}」`)}${m.confirmed ? '' : unconfirmed}`);
-  const cvCols = cfg.metricNames.cv.value.map((n) => `"${n}"`).join(' / ');
-  out.push(`  - ${L(`CV = GA4 column ${cvCols}`, `CV = GA4 の列 ${cvCols}`)}${cfg.metricNames.cv.confirmed ? '' : unconfirmed}`);
-
-  h(4, 'Overall SEO summary', 'SEO 全体サマリー');
-  const count = (s: string) => measurements.filter((m) => m.status === s).length;
-  out.push(
-    kv(L('Measurements', '測定'), `${measurements.length}  (OK ${count('OK')}, NG ${count('NG')}, ${L('NOT_EVALUABLE', '評価不可')} ${count('NOT_EVALUABLE')})`),
-    kv(L('Anomalies detected', '検知した異常'), String(anomalies.length)),
-  );
-  for (const r of results.filter((x) => x.subjectType === 'site'))
-    out.push(kv(M(r.metric), `${fmtVal(r.metric, r.previousValue)} → ${fmtVal(r.metric, r.currentValue)}  (${fmtPct(r.changeRate)})`));
-
-  h(5, 'Important metric changes', '主要指標の変化');
-  out.push(
-    ...table(
-      [L('Source', 'ソース'), L('Subject', '対象'), L('Metric', '指標'), L('Previous', '前期'), L('Current', '今期'), L('Abs. change', '絶対変化'), L('Change rate', '変化率'), L('Note', '備考')],
-      results.map((r) => [r.source, r.subjectKey, M(r.metric), fmtVal(r.metric, r.previousValue), fmtVal(r.metric, r.currentValue), fmtVal(r.metric, r.absoluteChange), fmtPct(r.changeRate), r.note ?? '']),
-    ),
-  );
-  out.push(L('Absolute change = current − previous; change rate = (current − previous) ÷ previous × 100.', '絶対変化 = 今期 − 前期、変化率 = (今期 − 前期) ÷ 前期 × 100。'));
-
-  h(6, 'Measurement results', '測定結果');
-  for (const m of measurements) {
-    out.push(
-      `[${m.status === 'NOT_EVALUABLE' ? L('NOT_EVALUABLE', '評価不可') : m.status}] ${m.name}  (${L('rule', 'ルール')} ${m.ruleId})`,
-      `    ${pad(L('Threshold', '閾値'), 10)}: ${m.thresholdValue === null ? L('not configured', '未設定') : `±${m.thresholdValue}`} ${S(m.thresholdUnit)}`,
-      `    ${pad(L('Result', '結果'), 10)}: ${m.result}`,
-      ...wrapAfter(`    ${pad(L('Reason', '理由'), 10)}: `, m.reason),
-    );
-  }
-  out.push(L('NG = significant business-rule change. It does not mean the uploaded data is invalid.', 'NG = ビジネスルール上の有意な変化。アップロードデータが無効という意味ではありません。'));
-
-  h(7, 'Significant SEO anomalies', '有意な SEO 異常');
-  if (!anomalies.length) out.push(L('No anomaly detected in this run.', 'この実行では異常は検知されませんでした。'));
-  for (const a of anomalies)
-    out.push(
-      `${L('Anomaly', '異常')} #${a.id}  ${a.subjectKey} / ${M(a.metric)}: ${fmtVal(a.metric, a.previousValue)} → ${fmtVal(a.metric, a.currentValue)} (${fmtVal(a.metric, a.change)}, ${fmtPct(a.changeRate)})  ${L('detected', '検知日')} ${a.detectionDate}  ${L('state', '状態')} ${S(a.state)}`,
-    );
-
-  h(8, 'Numerical analysis comments', '数値分析コメント');
-  const comments = results
-    .filter((r) => r.previousValue !== null && r.currentValue !== null && r.subjectType !== 'segment')
-    .map((r) => {
-      const d = r.absoluteChange!;
-      const from = fmtVal(r.metric, r.previousValue);
-      const to = fmtVal(r.metric, r.currentValue);
-      return L(
-        `- ${r.subjectKey} ${M(r.metric)} ${d < 0 ? 'decreased' : d > 0 ? 'increased' : 'did not change'} from ${from} to ${to} (${fmtPct(r.changeRate)}).`,
-        `- ${r.subjectKey} の${M(r.metric)}は ${from} から ${to} に${d < 0 ? '減少' : d > 0 ? '増加' : '変化なし'}（${fmtPct(r.changeRate)}）。`,
-      );
-    });
-  out.push(...(comments.length ? comments : [L('No complete period comparison is available.', '完全な期間比較はありません。')]));
-  out.push(L('These are numerical facts. Interpretations are listed separately under Possible causes.', 'これらは数値上の事実です。解釈は「可能性のある原因」に分けて記載します。'));
-
-  h(9, 'Possible causes (hypotheses — not confirmed)', '可能性のある原因（仮説 — 未確定）');
-  const causes = anomalies.map((a) => ({ a, c: localize(getCause(db, a.id), lang) })).filter((x) => x.c);
-  if (!causes.length) out.push(L('No cause hypothesis — no anomaly in this run.', '原因仮説はありません — この実行に異常はありません。'));
-  for (const { a, c } of causes)
-    out.push(
-      ...wrap(`${L('Anomaly', '異常')} #${a.id}: ${c!.causeText}`),
-      ...wrap(`    ${L('Confidence', '信頼度')}: ${S(c!.confidence)} — ${c!.confidenceReason}`),
-      `    ${L('Review status', 'レビュー状況')}: ${S(c!.reviewStatus)}`,
-    );
-
-  h(10, 'Supporting evidence', '裏付けとなる根拠');
-  for (const m of measurements) {
-    const ev = localize(
-      parseJson<{ items: { label: string; value: string; caveat?: string }[]; tables: EvidenceTable[] }>(
-        db.prepare('SELECT evidence_json FROM measurements WHERE id = ?').pluck().get(m.id) as string,
-        { items: [], tables: [] },
-      ),
-      lang,
-    );
-    out.push(`${m.name}:`);
-    for (const i of ev.items) out.push(...wrap(`  - ${i.label}: ${i.value}${i.caveat ? ` [${i.caveat}]` : ''}`));
-    for (const t of ev.tables) {
-      out.push('', `  ${t.title}`);
-      if (t.note) out.push(...wrap(`  ${t.note}`));
-      out.push(...table(t.columns, t.rows.map((r) => r.map((v) => (typeof v === 'number' ? fmtNum(v, Number.isInteger(v) ? 0 : 2) : v ?? '—')))).map((l) => `  ${l}`));
-    }
-    const refs = sourceRefs(db, m.id);
-    const byUpload = new Map<string, number>();
-    for (const r of refs) {
-      const k = `${L('upload', 'アップロード')} #${r.uploadId} ${r.fileName}`;
-      byUpload.set(k, (byUpload.get(k) ?? 0) + 1);
-    }
-    out.push(
-      `  ${L('Source records used', '使用したソースレコード')}: ${refs.length ? [...byUpload].map(([k, n]) => `${k} (${n} ${L('values', '値')})`).join('; ') : L('none', 'なし')}`,
-      '',
-    );
-  }
-
-  h(11, 'Countermeasure suggestions', '対策の提案');
-  let anyCm = false;
-  for (const { a, c } of causes)
-    for (const k of localize(listCountermeasures(db, c!.id), lang)) {
-      anyCm = true;
-      out.push(
-        `${L('Anomaly', '異常')} #${a.id} → ${k.actionText}`,
-        `    ${pad(L('Target', '対象'), 8)}: ${k.target}`,
-        ...wrapAfter(`    ${pad(L('Reason', '理由'), 8)}: `, k.reason),
-        `    ${pad(L('Status', 'ステータス'), 8)}: ${S(k.status)}`,
-      );
-    }
-  if (!anyCm) out.push(L('No countermeasure suggested (no anomaly, or no client-defined follow-up applies).', '対策の提案はありません（異常がない、またはクライアント定義のフォローアップが該当しない）。'));
-
-  h(12, 'SEO team decision / status', 'SEO チームの判断 / ステータス');
-  for (const { a, c } of causes) {
-    const cms = listCountermeasures(db, c!.id).map((k) => `#${k.id} ${S(k.status)}`).join(', ') || L('none', 'なし');
-    out.push(
-      L(
-        `Anomaly #${a.id}: state ${a.state}; cause review ${c!.reviewStatus}; countermeasures ${cms}`,
-        `異常 #${a.id}：状態 ${S(a.state)}、原因レビュー ${S(c!.reviewStatus)}、対策 ${cms}`,
-      ),
-    );
-  }
-  const events = (
-    db
-      .prepare(
-        `SELECT e.* FROM state_events e WHERE
-           (e.entity = 'anomaly' AND e.entity_id IN (SELECT a.id FROM anomalies a JOIN measurements m ON m.id = a.measurement_id WHERE m.run_id = ?))
-        OR (e.entity = 'cause' AND e.entity_id IN (SELECT c.id FROM cause_hypotheses c JOIN anomalies a ON a.id = c.anomaly_id JOIN measurements m ON m.id = a.measurement_id WHERE m.run_id = ?))
-        OR (e.entity = 'countermeasure' AND e.entity_id IN (SELECT k.id FROM countermeasures k JOIN cause_hypotheses c ON c.id = k.cause_id JOIN anomalies a ON a.id = c.anomaly_id JOIN measurements m ON m.id = a.measurement_id WHERE m.run_id = ?))
-         ORDER BY e.id`,
+  const files = used.map((u) => u.f);
+  const sources = [...new Set(used.map((u) => u.s))].sort();
+  const sourceNames = sources.map((s) => (s === 'GSC' ? L('Google Search Console (investigation evidence)', 'Google Search Console（調査の根拠）') : 'Google Analytics 4 (GA4)'));
+  const anomalies = await listAnomalies(db, runId);
+  const items = ng.map((m) => ({ m, a: anomalies.find((x) => x.measurementId === m.id) ?? null }));
+  const causes: { m: (typeof items)[number]['m']; a: (typeof items)[number]['a']; c: Awaited<ReturnType<typeof getCause>> }[] = [];
+  for (const { m, a } of items) causes.push({ m, a, c: a ? localize(await getCause(db, a.id), lang) : null });
+  // Most important finding: a negative change first (it needs action), then the largest change.
+  const lead = [...ng].sort((x, y) => Number(positive(x)) - Number(positive(y)) || Math.abs(y.changeRate ?? 0) - Math.abs(x.changeRate ?? 0))[0];
+  const keyFinding = lead
+    ? L(
+        `${short(lead)} ${positive(lead) ? 'increased' : 'decreased'} ${changeText(lead)} week on week (${fmtVal(lead.metric, lead.previousValue)} → ${fmtVal(lead.metric, lead.currentValue)}), beyond the ${thresholdText(lead)} threshold.`,
+        `${short(lead)}が前週比 ${changeText(lead)} ${positive(lead) ? '増加' : '減少'}しました（${fmtVal(lead.metric, lead.previousValue)} → ${fmtVal(lead.metric, lead.currentValue)}）。閾値 ${thresholdText(lead)} を超えています。`,
       )
-      .all(runId, runId, runId) as Row[]
-  ).map(toEvent);
-  if (!events.length) out.push(L('No SEO team decision recorded yet.', 'SEO チームの判断はまだ記録されていません。'));
-  for (const e of events)
-    out.push(`  ${e.at.slice(0, 16).replace('T', ' ')}  ${e.actor}: ${S(e.entity)} #${e.entityId} ${S(e.fromState)} → ${S(e.toState)}${e.note ? ` — ${e.note}` : ''}`);
+    : overall === 'OK'
+      ? L('All evaluated measurements stayed within their thresholds.', '評価したすべての測定は閾値内でした。')
+      : L('No measurement could be evaluated for this period.', 'この期間はどの測定も評価できませんでした。');
+  doc.title = L('SEO Performance Report', 'SEO パフォーマンスレポート');
+  doc.meta = { runId, dataSources: sourceNames, files, overall, evaluated: ok.length + ng.length, ok: ok.length, ng: ng.length, notEvaluable: ne.length, keyFinding };
 
-  h(13, 'Open monitoring items', '未完了の監視項目');
-  const open = listAnomalies(db).filter((a) => !['Resolved', 'Dismissed'].includes(a.state));
-  if (!open.length) out.push(L('No open anomalies.', '未完了の異常はありません。'));
-  for (const a of open) {
-    const r = getRun(db, a.runId)!;
-    out.push(`${L('Anomaly', '異常')} #${a.id} (${r.current.start} – ${r.current.end}${a.runId === runId ? L(', this run', '、今回の実行') : ''}): ${a.subjectKey} / ${M(a.metric)} — ${S(a.state)}`);
+  // ---- 1. Analysis Summary (report header + executive summary) ----
+  section('Analysis Summary', '分析サマリー');
+  add(
+    {
+      t: 'kv',
+      rows: [
+        [L('Analysis period', '分析期間'), `${run.current.start} – ${run.current.end}`],
+        [L('Compared with', '比較対象'), `${run.previous.start} – ${run.previous.end}`],
+        [L('Data source', 'データソース'), sourceNames.length ? sourceNames.join(', ') : L('none', 'なし')],
+        [L('Data files', 'データファイル'), files.length ? files.join(', ') : L('none', 'なし')],
+        [L('Run', '実行'), `#${runId}`],
+        [L('Generated', '生成日時'), when(nowIso())],
+      ],
+    },
+    { t: 'status', status: overall, label: RESULT(overall), title: L('Overall result', '総合結果'), meta: overallNote },
+    {
+      t: 'kv',
+      rows: [
+        [L('Measurements evaluated', '評価した測定'), String(ok.length + ng.length) + (ne.length ? L(` (${ne.length} not evaluable)`, `（評価不可 ${ne.length} 件）`) : '')],
+        [L('OK', 'OK'), String(ok.length)],
+        [L('NG (significant change)', 'NG（有意な変化）'), String(ng.length)],
+        [L('Key finding', '主な所見'), keyFinding],
+      ],
+    },
+  );
+  if (testData) add(p(L('Includes dates the uploaded file marks as test (fake) data — not business results.', 'アップロードしたファイルでテスト（フェイク）データとされた日付を含みます — 業務上の結果ではありません。'), 'warn'));
+
+  // ---- 2. Measurement Summary ----
+  section('Measurement Summary', '測定サマリー');
+  add({
+    t: 'table',
+    columns: [L('Measurement', '測定'), L('Metric', '指標'), L('Change', '変化'), L('Threshold', '閾値'), L('Result', '結果')],
+    rows: measurements.map((m) => [short(m), METRIC_LABEL[m.metric]?.[lang] ?? m.metric, changeText(m), thresholdText(m), resultText(m)]),
+  });
+  if (ne.length) add({ t: 'list', items: ne.map((m) => `${short(m)} — ${L('NOT EVALUABLE', '評価不可')}: ${notEvaluableReason(m)}`) });
+
+  // ---- 3. Detected Changes / Anomalies ----
+  section('Detected Changes / Anomalies', '検知した変化 / 異常');
+  if (!ng.length) {
+    add(p(L('No significant change detected.', '有意な変化は検知されませんでした。')));
+    return finish(doc, lang);
+  }
+  for (const { m, a } of items)
+    add({
+      t: 'group',
+      title: `${short(m)} — ${kind(m)}`,
+      status: a?.state,
+      statusLabel: a ? S(a.state) : undefined,
+      blocks: [
+        {
+          t: 'kv',
+          rows: [
+            [L('Current value', '今期の値'), fmtVal(m.metric, m.currentValue)],
+            [L('Previous value', '前期の値'), fmtVal(m.metric, m.previousValue)],
+            [L('Change', '変化'), changeText(m)],
+            [L('Threshold', '閾値'), thresholdText(m)],
+            [L('Result', '結果'), resultText(m)],
+            [L('Why it was detected', '検知の理由'), clean(m.reason)],
+            [L('Anomaly record', '異常レコード'), a ? `#${a.id} ${S(a.state)}` : '—'],
+          ],
+        },
+      ],
+    });
+
+  // ---- 4. Investigation ----
+  section('Investigation', '調査');
+  for (const { m, c } of causes) {
+    const an = c?.analysis ?? null;
+    const inv = an?.investigation ?? null;
+    const blocks: ReportBlock[] = [];
+    const observed = an?.facts[0] ?? c?.supportingEvidence.items[0]?.value ?? clean(m.reason);
+    blocks.push({ t: 'kv', rows: [[L('Observed', '観測された事実'), observed]] });
+    // GA4 evidence: the figures behind the result (stored with the run).
+    if (m.basis.length)
+      blocks.push({
+        t: 'table',
+        title: L('GA4 evidence — supporting metrics', 'GA4 の根拠 — 関連指標'),
+        columns: [L('Figure', '項目'), L('Previous', '前期'), L('Current', '今期'), L('Change', '変化')],
+        rows: m.basis.map((b) => [b.label, fmtVal(b.metric, b.previous), fmtVal(b.metric, b.current), b.changeRate === null ? '—' : fmtPct(b.changeRate)]),
+      });
+    // GSC evidence: only when the investigation ran for this measurement.
+    if (an?.gscEvidence) blocks.push(...gscSummary(an, L, lang, false).slice(0, 1));
+    if (inv) blocks.push(...investigationBlocks(inv, L));
+    // What to review: data the investigation could not use, and what the analysis says is missing.
+    const review = [
+      ...(inv ? inv.checks.filter((k) => !k.available).map((k) => `${k.id}: ${k.reason ?? ''}`) : []),
+      ...(an?.missing ?? []),
+    ];
+    if (review.length) blocks.push(p(L('Data to review to understand the reason:', '理由を把握するために確認すべきデータ：')), { t: 'list', items: review });
+    const conclusive = !!inv?.matched;
+    blocks.push(
+      conclusive
+        ? p(L(`GSC investigation indicates: ${inv!.cause} (confidence: ${inv!.confidence}).`, `GSC の調査が示す内容：${inv!.cause}（信頼度：${inv!.confidence}）。`))
+        : p(L('Cause not conclusively determined from available data.', '利用可能なデータからは原因を確定できません。'), 'warn'),
+    );
+    add({ t: 'group', title: short(m), blocks });
   }
 
-  h(14, 'Data quality warnings', 'データ品質の警告');
-  for (const i of run.issues) out.push(...wrap(`- [${L('run', '実行')}] ${i.message}`));
-  for (const u of uploads) {
-    const issues = db.prepare('SELECT code, COUNT(*) n, MIN(message) example FROM upload_issues WHERE upload_id = ? GROUP BY code ORDER BY code').all(u.id) as Row[];
-    for (const i of issues) out.push(...wrap(`- [${L('upload', 'アップロード')} #${u.id} ${u.file_name}] ${i.code}${i.n > 1 ? ` ×${i.n}` : ''}: ${loc(i.example, lang)}`));
+  // ---- 5. Cause ----
+  section('Cause', '原因');
+  for (const { m, c } of causes) {
+    if (!c) {
+      add(p(`${short(m)}: ${L('No cause hypothesis was generated.', '原因仮説は生成されていません。')}`, 'muted'));
+      continue;
+    }
+    const an = c.analysis;
+    const inv = an?.investigation ?? null;
+    const text = c.amendments.length ? c.causeText : an ? an.title : c.causeText;
+    const rows: [string, string][] = [
+      [L('Possible cause', '考えられる原因'), `${text}${c.amendments.length ? ` (${L('modified by', '修正者')} ${c.amendments.at(-1)!.actor})` : ''}`],
+    ];
+    if (an?.facts[0]) rows.push([L('Supporting evidence', '裏付けとなる根拠'), an.facts.slice(0, 2).join(' ')]);
+    else if (c.supportingEvidence.items[0]) rows.push([L('Supporting evidence', '裏付けとなる根拠'), c.supportingEvidence.items.map((i) => i.value).join(' ')]);
+    // A rule match proves the pattern in the numbers, not the business reason behind it.
+    rows.push([L('Rule-match confidence', 'ルール該当の信頼度'), `${S(c.confidence)} — ${L('the GA4 values match the rules.yaml pattern (calculation)', 'GA4 の値が rules.yaml のパターンに該当（計算）')}`]);
+    rows.push([
+      L('Cause confidence', '原因の信頼度'),
+      inv?.matched ? `${inv.confidence} — ${inv.ruleId}` : L('Not determined — hypothesis until the SEO team reviews the evidence', '未確定 — SEO チームが根拠を確認するまでは仮説'),
+    ]);
+    rows.push([L('Review status', 'レビュー状況'), S(c.reviewStatus)]);
+    add({ t: 'group', title: short(m), status: c.reviewStatus, statusLabel: S(c.reviewStatus), blocks: [{ t: 'kv', rows }] });
   }
-  out.push('', L('Unresolved client questions affecting this report:', 'このレポートに影響するクライアントへの未解決事項：'));
-  for (const u of unresolvedItems(cfg)) out.push(...wrap(`- ${loc(u.description, lang)}`));
 
-  out.push('', '='.repeat(78), L('End of report', 'レポート終わり'), '='.repeat(78));
+  // ---- 6. Recommended Action / Countermeasure ----
+  section('Recommended Action / Countermeasure', '推奨アクション / 対策');
+  const invIds = new Set(cfg.investigations.map((x) => x.id));
+  const actions: { m: (typeof causes)[number]['m']; k: Awaited<ReturnType<typeof listCountermeasures>>[number] }[] = [];
+  for (const { m, c } of causes) for (const k of c ? localize(await listCountermeasures(db, c.id), lang) : []) actions.push({ m, k });
+  for (const { m, k } of actions) {
+    const adj = k.amendments.at(-1);
+    const label = positive(m) ? L('Recommended action', '推奨アクション') : L('Countermeasure', '対策');
+    add({
+      t: 'group',
+      title: `${short(m)} — ${label}`,
+      status: k.status,
+      statusLabel: S(k.status),
+      blocks: [
+        {
+          t: 'kv',
+          rows: [
+            [label, `${k.actionText}${adj ? ` (${L('adjusted by', '調整者')} ${adj.actor})` : ''}`],
+            [L('Target', '対象'), k.target],
+            [L('Responsible team', '担当チーム'), k.responsibleTeam ?? L('not assigned', '未割当')],
+            [L('Approval status', '承認状況'), S(k.status)],
+            ...([...invIds].some((id) => k.reason.startsWith(id)) ? [[L('Basis', '根拠'), k.reason] as [string, string]] : []),
+          ],
+        },
+      ],
+    });
+  }
+  if (!actions.length) add(p(L('No action proposed.', '提案されたアクションはありません。'), 'muted'));
+
+  // ---- 7. Team Feedback ----
+  section('Team Feedback', 'チームへのフィードバック');
+  const feedback = actions.filter(({ k }) => k.reason && ![...invIds].some((id) => k.reason.startsWith(id)));
+  if (feedback.length) add({ t: 'kv', rows: feedback.map(({ m, k }) => [k.responsibleTeam ?? L('No team assigned', '担当チーム未割当'), `${short(m)}: ${k.reason}`] as [string, string]) });
+  else add(p(L('No team feedback for this run.', 'この実行のチームへのフィードバックはありません。'), 'muted'));
+  return finish(doc, lang);
+}
+
+/** GSC_R01 in the report: affected queries / pages with clicks, impressions, CTR and position. */
+function investigationBlocks(inv: GscInvestigation, L: (en: string, ja: string) => string): ReportBlock[] {
+  const out: ReportBlock[] = [];
+  const pos = (a: number | null, b: number | null) => (a === null || b === null ? '—' : `${a.toFixed(2)} → ${b.toFixed(2)}`);
+  const ctr = (a: number | null, b: number | null) => (a === null || b === null ? '—' : `${a.toFixed(2)}% → ${b.toFixed(2)}%`);
+  for (const k of inv.checks.filter((x) => x.available && x.affected.length))
+    out.push({
+      t: 'table',
+      title: `${inv.ruleId} · ${k.id} — ${L('largest clicks decrease', 'クリック減少が大きい順')}`,
+      note: k.files.previous && k.files.current ? `${k.files.previous} → ${k.files.current}` : undefined,
+      columns: [L('Query / page', 'クエリ / ページ'), L('Clicks', 'クリック数'), L('Impressions change', '表示回数の変化'), 'CTR', L('Position', '掲載順位')],
+      rows: k.affected.slice(0, 5).map((r) => [r.key, `${fmtNum(r.clicksPrevious)} → ${fmtNum(r.clicksCurrent)}`, `${r.impressionsChange > 0 ? '+' : ''}${fmtNum(r.impressionsChange)}`, ctr(r.ctrPrevious, r.ctrCurrent), pos(r.positionPrevious, r.positionCurrent)]),
+    });
+  const affected = [
+    inv.affectedDevice ? `${L('Device', 'デバイス')}: ${inv.affectedDevice}` : '',
+    inv.affectedSearchAppearance ? `${L('Search appearance', '検索での見え方')}: ${inv.affectedSearchAppearance}` : '',
+  ].filter(Boolean);
+  if (affected.length) out.push({ t: 'kv', rows: [[L('Concentrated on', '集中している対象'), affected.join(' · ')]] });
+  return out;
+}
+
+/** English report: the client's Japanese segment and column names in English (keywords and file names unchanged). */
+const finish = (doc: ReportDoc, lang: Lang) => (lang === 'en' ? mapStrings(doc, (x) => translateDataTerms(x, false)) : doc);
+
+/** GSC findings in a few lines: Chart by Date trend, top pages / queries, device / country only when available. */
+function gscSummary(an: NonNullable<CauseHypothesisAnalysis>, L: (en: string, ja: string) => string, lang: Lang, withGa4 = true): ReportBlock[] {
+  const g = an.gscEvidence!;
+  const d = g.dateChart;
+  const NAME: Record<string, string> = { clicks: L('Clicks', 'クリック数'), impressions: L('Impressions', '表示回数'), ctr: 'CTR', position: L('Position', '掲載順位') };
+  const DIR: Record<string, string> = { down: '↓', up: '↑', same: L('→ same', '→ 横ばい'), worse: L('worse', '悪化'), better: L('better', '改善') };
+  const rows: [string, string][] = [];
+  if (withGa4 && an.facts[0]) rows.push([L('GA4 organic traffic', 'GA4 オーガニック流入'), an.facts[0]]);
+  if (d.available)
+    rows.push([
+      L('Chart by Date (same weeks)', '日付別チャート（同じ週）'),
+      `${d.metrics.map((m) => `${NAME[m.metric]} ${DIR[m.direction]}${m.metric === 'position' ? ` (${m.previous.toFixed(1)} → ${m.current.toFixed(1)})` : ` ${fmtPct(m.changeRate)}`}`).join(' · ')}. ${d.summary ?? ''} ${d.indicationText ?? ''}`.trim(),
+    ]);
+  else rows.push([L('Chart by Date', '日付別チャート'), L(`Not available for the measured weeks. ${d.reason ?? ''}`, `測定週のデータはありません。${d.reason ?? ''}`).trim()]);
+  // Device and country names are whole values: translated in English (search queries and URLs are not).
+  const name = (s: GscSnapshot, key: string) => (lang === 'en' && (s === g.devices || s === g.countries) ? translateDataTerms(key) : key);
+  const top = (s: GscSnapshot, k = 3) => s.top.slice(0, k).map((r) => `${name(s, r.key)}${r.share !== null ? ` (${r.share}%)` : ''}`).join(', ');
+  if (g.pages.available) rows.push([L('Top pages', '上位ページ'), top(g.pages)]);
+  if (g.queries.available)
+    rows.push([L('Top queries', '上位クエリ'), `${top(g.queries)}${g.queries.brandShare !== null ? ` — ${L('brand share', 'ブランドの割合')} ${g.queries.brandShare}%` : ''}`]);
+  const split = [g.devices.available ? `${L('Devices', 'デバイス')}: ${top(g.devices)}` : '', g.countries.available ? `${L('Countries', '国')}: ${top(g.countries, 2)}` : ''].filter(Boolean);
+  if (split.length) rows.push([L('Device / country', 'デバイス / 国'), split.join(' · ')]);
+  return [
+    { t: 'kv', rows },
+    { t: 'p', text: L('Search Console has no OK / NG of its own: it is used by the GSC_R01 investigation when M1 is NG with organic sessions decreasing. Top pages, queries, devices and countries above are period totals (shares of clicks).', 'Search Console には独自の OK / NG はありません。M1 が NG でオーガニックのセッションが減少したときに GSC_R01 の調査で使用します。上記の上位ページ・クエリ・デバイス・国は期間合計（クリック数のシェア）です。'), tone: 'muted' },
+  ];
+}
+
+/** 2026-10-07T08:41:48.853Z → 2026-10-07 08:41 UTC */
+const when = (iso: string) => `${iso.slice(0, 16).replace('T', ' ')} UTC`;
+const VALIDATION_EN: Record<string, string> = { valid: 'Valid', valid_with_warnings: 'Valid with warnings', invalid: 'Invalid' };
+
+function mapStrings<T>(v: T, f: (s: string) => string): T {
+  if (typeof v === 'string') return f(v) as T;
+  if (Array.isArray(v)) return v.map((x) => mapStrings(x, f)) as T;
+  if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, k === 't' || k === 'status' ? x : mapStrings(x, f)])) as T;
+  return v;
+}
+
+// ---------- TXT rendering ----------
+
+/** The TXT file: the same document with fixed-width layout (display width counts CJK as 2). */
+export function renderText(doc: ReportDoc): string {
+  const out: string[] = ['='.repeat(78), doc.title.toUpperCase(), '='.repeat(78)];
+  for (const s of doc.sections) {
+    out.push('', `${s.n}. ${s.title.toUpperCase()}`, '-'.repeat(78));
+    out.push(...blocksText(s.blocks, ''));
+  }
+  out.push('', '='.repeat(78), /[ぁ-ん]/.test(doc.title) ? 'レポート終わり' : 'End of report', '='.repeat(78));
   return out.join('\n') + '\n';
 }
+
+function blocksText(blocks: ReportBlock[], ind: string): string[] {
+  const out: string[] = [];
+  for (const b of blocks) {
+    if (b.t === 'kv') {
+      const w = Math.min(24, Math.max(...b.rows.map(([k]) => width(k))) + 1);
+      for (const [k, v] of b.rows) out.push(...wrapAfter(`${ind}${pad(k, w)}: `, v));
+    } else if (b.t === 'table') {
+      if (b.title) out.push('', `${ind}${b.title}`);
+      if (b.note) out.push(...wrap(`${ind}${b.note}`));
+      out.push(...table(b.columns, b.rows).map((l) => `${ind}${l}`));
+    } else if (b.t === 'p') out.push(...wrap(`${ind}${b.text}`));
+    else if (b.t === 'list') for (const i of b.items) out.push(...wrap(`${ind}- ${i}`));
+    else if (b.t === 'status') out.push(`${ind}[${b.label}] ${b.title}${b.meta ? `  (${b.meta})` : ''}`);
+    else if (b.t === 'group') {
+      // A measurement group starts with its own status line; other groups get a title line.
+      if (!(b.blocks[0]?.t === 'status')) out.push('', `${ind}${b.title}${b.title.endsWith(':') ? '' : ':'}`);
+      else out.push('');
+      const inner = blocksText(b.blocks, `${ind}  `);
+      // The status line stays at the group's indent.
+      if (b.blocks[0]?.t === 'status') inner[0] = inner[0]!.replace(/^\s+/, ind);
+      out.push(...inner);
+    }
+  }
+  return out;
+}
+
 
 // ---------- Text formatting ----------
 

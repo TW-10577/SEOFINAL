@@ -19,7 +19,7 @@ export function DataQualityWarnings({ issues, title }: { issues: Issue[]; title?
         {[...groups].map(([k, list]) => (
           <li key={k} style={{ flexDirection: 'column', alignItems: 'stretch' }}>
             <div className="row">
-              <StatusBadge status={list[0]!.severity === 'error' ? 'invalid' : 'valid_with_warnings'} title={t(list[0]!.severity)} />
+              <StatusBadge status={list[0]!.severity === 'error' ? 'error' : 'warning'} />
               <span className="mono">{list[0]!.code}</span>
               <span>{list[0]!.message}</span>
               {list.length > 1 && (

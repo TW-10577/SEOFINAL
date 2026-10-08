@@ -6,6 +6,7 @@
 // Columns are identified by their two header cells, never by position.
 import type { Issue, Period } from '@seo/shared';
 import { isBlankRow, parseDate, parseNumber, type Grid } from './grid.ts';
+import { syntheticRanges } from './synthetic.ts';
 import { enc, tx } from '../i18n.ts';
 import type { Detection, NormalizedValue, ParsedRecord } from './types.ts';
 
@@ -14,7 +15,7 @@ const DATE_HEADERS = ['日付', 'date'];
 const TOTAL_LABELS = ['総計', 'total', 'totals', 'grand total'];
 
 /** Known GA4 metric headers → normalized metric key. Unknown headers keep their exported name. */
-const METRIC_KEYS: Record<string, string> = {
+export const METRIC_KEYS: Record<string, string> = {
   'セッション': 'sessions',
   sessions: 'sessions',
   'e コマース購入数': 'ecommerce_purchases',
@@ -82,7 +83,7 @@ export function parseGa4(grid: Grid): Detection {
     cols.push({ index: j, segment, metric: m, key: METRIC_KEYS[m.toLowerCase()] ?? m, header: `${segment} / ${m}` });
   }
   if (!cols.some((c) => SESSIONS_HEADERS.includes(c.metric.toLowerCase())))
-    return { ok: false, issue: { severity: 'error', code: 'missing-column', message: bi('GA4 export has no セッション (Sessions) column.', 'GA4 エクスポートに「セッション」列がありません。'), column: 'セッション' } };
+    return { ok: false, issue: { severity: 'error', code: 'missing-column', message: bi('GA4 export has no セッション column.', 'GA4 エクスポートに「セッション」列がありません。'), column: 'セッション' } };
 
   // Export header date range, e.g. "20260912-20260913".
   let headerPeriod: Period | null = null;
@@ -94,9 +95,18 @@ export function parseGa4(grid: Grid): Detection {
       if (start && end) headerPeriod = { start, end };
     }
   }
-  const synthetic = comments.filter((c) => /fake|dummy|synthetic|ダミー/i.test(c));
-  if (synthetic.length)
-    issues.push({ severity: 'warning', code: 'synthetic-data', message: bi(`Export notes say part of this file is not real data: ${synthetic.join(' / ')}`, `エクスポートの注記によると、このファイルの一部は実データではありません：${synthetic.join(' / ')}`) });
+  const synthetic = syntheticRanges(comments);
+  if (synthetic) {
+    const which = synthetic === 'all' ? tx('all dates', '全期間') : tx(synthetic.map((p) => `${p.start} – ${p.end}`).join(', '));
+    issues.push({
+      severity: 'warning',
+      code: 'synthetic-data',
+      message: bi(
+        `The export notes mark data as not real (${which.en}). Results that use those dates are labelled TEST DATA (data_policy in rules.yaml).`,
+        `エクスポートの注記で実データではないとされています（${which.ja}）。これらの日付を使った結果は TEST DATA と表示されます（rules.yaml の data_policy）。`,
+      ),
+    });
+  }
 
   const records: ParsedRecord[] = [];
   const seenDates = new Map<string, number>();

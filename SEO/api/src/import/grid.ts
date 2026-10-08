@@ -1,32 +1,10 @@
-// Turns an uploaded file into grids of cell text. CSV → one grid; Excel → one grid per sheet.
-import * as XLSX from 'xlsx';
+// Grids of cell text and the low-level text helpers shared by the format extractors (formats.ts).
 
 export interface Grid {
-  /** Sheet name for Excel, '' for CSV. */
+  /** Sheet, table or ZIP entry name; '' for a single table. */
   name: string;
   /** rows[i] is source row i + 1. */
   rows: string[][];
-}
-
-export type FileType = 'csv' | 'xlsx';
-
-export function fileTypeOf(fileName: string): FileType | null {
-  const ext = fileName.toLowerCase().split('.').pop();
-  if (ext === 'csv' || ext === 'tsv' || ext === 'txt') return 'csv';
-  if (ext === 'xlsx' || ext === 'xls') return 'xlsx';
-  return null;
-}
-
-export function readGrids(fileType: FileType, buf: Buffer): Grid[] {
-  if (fileType === 'xlsx') {
-    const wb = XLSX.read(buf, { type: 'buffer' });
-    return wb.SheetNames.map((name) => {
-      const sheet = wb.Sheets[name]!;
-      const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, raw: false, defval: '', blankrows: true });
-      return { name, rows: rows.map((r) => r.map((c) => (c == null ? '' : String(c)))) };
-    });
-  }
-  return [{ name: '', rows: parseDelimited(decodeText(buf)) }];
 }
 
 /** UTF-8 (with or without BOM), UTF-16 with BOM, otherwise Shift_JIS. */

@@ -55,9 +55,12 @@ function headerRowIndex(grid: Grid): number {
   return grid.rows.findIndex((r) => !isBlankRow(r));
 }
 
+/** A Search Console tab: a known dimension in the first column and at least one GSC metric column (or the filter tab). */
 export function looksLikeGsc(grid: Grid): boolean {
-  const first = lower(grid.rows[headerRowIndex(grid)]?.[0] ?? '');
-  return first in DIMENSIONS || FILTER_HEADERS.includes(first);
+  const header = grid.rows[headerRowIndex(grid)] ?? [];
+  const first = lower(header[0] ?? '');
+  if (FILTER_HEADERS.includes(first)) return true;
+  return first in DIMENSIONS && header.slice(1).some((h) => lower(h) in METRICS);
 }
 
 export function parseGsc(grid: Grid): Detection {
@@ -86,7 +89,7 @@ export function parseGsc(grid: Grid): Detection {
   const metricCols = header.map((name, index) => ({ name, index, key: METRICS[name.toLowerCase()] })).filter((c) => c.key && c.index > 0);
   for (const required of ['clicks', 'impressions'] as const)
     if (!metricCols.some((c) => c.key === required))
-      return { ok: false, issue: { severity: 'error', code: 'missing-column', message: bi(`GSC export has no ${required === 'clicks' ? 'クリック数 (Clicks)' : '表示回数 (Impressions)'} column.`, `GSC エクスポートに「${required === 'clicks' ? 'クリック数' : '表示回数'}」列がありません。`), column: required } };
+      return { ok: false, issue: { severity: 'error', code: 'missing-column', message: bi(`GSC export has no ${required === 'clicks' ? 'クリック数' : '表示回数'} column.`, `GSC エクスポートに「${required === 'clicks' ? 'クリック数' : '表示回数'}」列がありません。`), column: required } };
   const issues: Issue[] = [];
   for (const optional of ['ctr', 'position'] as const)
     if (!metricCols.some((c) => c.key === optional)) issues.push({ severity: 'warning', code: 'missing-column', message: bi(`GSC export has no ${optional} column.`, `GSC エクスポートに ${optional === 'ctr' ? 'CTR' : '掲載順位'} 列がありません。`), column: optional });

@@ -241,6 +241,8 @@ spec:
         fromState: TRIAGED
         toState: COUNTERMEASURE_ASSIGNED
         actionRef: logos.seo.action.assign-countermeasure-owner
+        guards:
+          - context.hasApprovedCountermeasure == true
       - transitionId: resolve
         fromState: COUNTERMEASURE_ASSIGNED
         toState: RESOLVED

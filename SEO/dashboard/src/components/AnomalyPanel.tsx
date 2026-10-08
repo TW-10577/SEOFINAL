@@ -4,6 +4,7 @@ import { metricLabel, metricValue, pct, period, signed } from '../format.ts';
 import { Decision } from './Decision.tsx';
 import { StatusBadge } from './StatusBadge.tsx';
 import { t } from '../i18n.ts';
+import { dataLabel } from '../i18n.ts';
 
 export function AnomalyPanel({ anomaly, run, reviewer, onChanged }: { anomaly: Anomaly | null; run: MeasurementRun; reviewer: string; onChanged: () => void }) {
   const next = useNextTransitions('anomaly', anomaly?.state ?? '');
@@ -19,7 +20,7 @@ export function AnomalyPanel({ anomaly, run, reviewer, onChanged }: { anomaly: A
               <dt>{t('Anomaly ID')}</dt><dd>#{anomaly.id}</dd>
               <dt>{t('State')}</dt><dd><StatusBadge status={anomaly.state} /></dd>
               <dt>{t('Detection date')}</dt><dd>{anomaly.detectionDate}</dd>
-              <dt>{t('Subject')}</dt><dd>{anomaly.subjectKey} ({anomaly.subjectType})</dd>
+              <dt>{t('Subject')}</dt><dd>{dataLabel(anomaly.subjectKey)} ({anomaly.subjectType})</dd>
               <dt>{t('Metric')}</dt><dd>{metricLabel(anomaly.metric)}</dd>
               <dt>{t('Values')}</dt>
               <dd>
@@ -27,7 +28,7 @@ export function AnomalyPanel({ anomaly, run, reviewer, onChanged }: { anomaly: A
               </dd>
               <dt>{t('Period')}</dt><dd>{t('Current')} {period(run.current)} / {t('Previous')} {period(run.previous)}</dd>
             </dl>
-            <Decision path={`/anomalies/${anomaly.id}/state`} next={next} reviewer={reviewer} onDone={onChanged} label="state" />
+            <Decision path={`/anomalies/${anomaly.id}/state`} next={next} reviewer={reviewer} onDone={onChanged} label="state" blocked={anomaly.blocked} />
           </>
         )}
       </div>

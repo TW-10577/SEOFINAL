@@ -3,6 +3,7 @@ import type { Issue, Period } from '@seo/shared';
 import type { DB } from '../db.ts';
 import { enc, tx, type LText } from '../i18n.ts';
 import { addDays } from '../import/ga4.ts';
+import { isSynthetic, syntheticMarks } from '../import/synthetic.ts';
 
 export interface DailyValue {
   date: string;
@@ -15,6 +16,9 @@ export interface DailySeries {
   byDate: Map<string, DailyValue>;
   /** Dates present in more than one upload (the latest upload is used). */
   overlaps: { date: string; uploads: number[] }[];
+  /** Dates whose value the export marks as not real; excluded from byDate unless includeSynthetic. */
+  synthetic: Set<string>;
+  includesSynthetic: boolean;
 }
 
 export interface Selector {
@@ -25,10 +29,14 @@ export interface Selector {
   sourceMetricNames?: string[];
   /** … or imported_data.metric_name (normalized key). */
   metricName?: string;
+  /** Keep values the export marks as not real (test mode, rules.yaml data_policy). Default: excluded. */
+  includeSynthetic?: boolean;
+  /** Only these uploads (the active import context); undefined = all uploads. */
+  uploadIds?: number[];
 }
 
 /** Valid daily values; when several uploads cover a date, the most recent upload wins. */
-export function dailySeries(db: DB, sel: Selector): DailySeries {
+export async function dailySeries(db: DB, sel: Selector): Promise<DailySeries> {
   const where = ['source = ?', 'is_valid = 1', 'data_date IS NOT NULL'];
   const args: unknown[] = [sel.source];
   if (sel.structure) (where.push('structure = ?'), args.push(sel.structure));
@@ -38,23 +46,38 @@ export function dailySeries(db: DB, sel: Selector): DailySeries {
     args.push(...sel.sourceMetricNames);
   }
   if (sel.metricName) (where.push('metric_name = ?'), args.push(sel.metricName));
-  const rows = db
-    .prepare(`SELECT id, upload_id, data_date, metric_value FROM imported_data WHERE ${where.join(' AND ')} ORDER BY upload_id, id`)
-    .all(...args) as { id: number; upload_id: number; data_date: string; metric_value: number }[];
+  if (sel.uploadIds) (where.push(`upload_id IN (${sel.uploadIds.map(() => '?').join(',') || 'NULL'})`), args.push(...sel.uploadIds));
+  const rows = await db.all<{ id: number; upload_id: number; data_date: string; metric_value: number }>(
+    `SELECT id, upload_id, data_date, metric_value FROM imported_data WHERE ${where.join(' AND ')} ORDER BY upload_id, id`,
+    ...args,
+  );
   const byDate = new Map<string, DailyValue>();
   const seen = new Map<string, Set<number>>();
+  const marks = await syntheticMarks(db);
+  const synthetic = new Set<string>();
   for (const r of rows) {
+    if (isSynthetic(marks.get(r.upload_id), r.data_date)) {
+      synthetic.add(r.data_date);
+      if (!sel.includeSynthetic) continue;
+    }
     byDate.set(r.data_date, { date: r.data_date, value: r.metric_value, importedDataId: r.id, uploadId: r.upload_id });
     (seen.get(r.data_date) ?? seen.set(r.data_date, new Set()).get(r.data_date)!).add(r.upload_id);
   }
   const overlaps = [...seen].filter(([, u]) => u.size > 1).map(([date, u]) => ({ date, uploads: [...u] }));
-  return { byDate, overlaps };
+  // A date counts as synthetic only when the value actually used is synthetic.
+  for (const d of [...synthetic]) {
+    const v = byDate.get(d);
+    if (v && !isSynthetic(marks.get(v.uploadId), d)) synthetic.delete(d);
+  }
+  return { byDate, overlaps, synthetic, includesSynthetic: !!sel.includeSynthetic };
 }
 
 export interface PeriodSum {
   value: number | null;
   missingDates: string[];
   refs: DailyValue[];
+  /** Dates in the period whose data the export marks as not real (excluded, or used in test mode). */
+  syntheticDates: string[];
 }
 
 export function daysOf(p: Period): string[] {
@@ -72,7 +95,7 @@ export function sumPeriod(s: DailySeries, p: Period): PeriodSum {
     if (v) refs.push(v);
     else missingDates.push(d);
   }
-  return { value: missingDates.length ? null : refs.reduce((a, r) => a + r.value, 0), missingDates, refs };
+  return { value: missingDates.length ? null : refs.reduce((a, r) => a + r.value, 0), missingDates, refs, syntheticDates: daysOf(p).filter((d) => s.synthetic.has(d)) };
 }
 
 /** Impression-weighted average of daily average positions. */
@@ -92,7 +115,7 @@ export function weightedPeriod(values: DailySeries, weights: DailySeries, p: Per
     num += v.value * w.value;
     den += w.value;
   }
-  return { value: missingDates.length || den === 0 ? null : num / den, missingDates, refs };
+  return { value: missingDates.length || den === 0 ? null : num / den, missingDates, refs, syntheticDates: daysOf(p).filter((d) => values.synthetic.has(d)) };
 }
 
 export function overlapIssues(label: LText, s: DailySeries): Issue[] {

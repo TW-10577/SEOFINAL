@@ -1,0 +1,865 @@
+# ============================================================
+# LOGOS SEO Measurement Rules
+# GA4 + GSC
+# ============================================================
+#
+# FLOW
+#
+# GA4
+#   Rule 1: Sessions
+#   Rule 2: CVR
+#
+# GSC
+#   Investigation only
+#   Used when GA4 Rule 1 detects Organic traffic decrease
+#
+# ============================================================
+
+
+rules:
+
+  # ==========================================================
+  # GA4 RULE 1
+  # Traffic Acquisition - Sessions
+  # ==========================================================
+
+  - rule_id: GA4_R01
+    rule_name: Traffic Acquisition - Sessions
+    rule_name_ja: 集客 - セッション
+    data_source: GA4
+    metric: Sessions
+
+    threshold:
+      type: relative_change
+      value: 3.9
+      unit: percent
+
+    comparison:
+      period: WoW
+      current_period: 7_days
+      previous_period: 7_days
+
+    formula:
+      total_sessions_wow_percent: >
+        ((current_week_total_sessions - previous_week_total_sessions)
+        / previous_week_total_sessions) * 100
+
+      organic_sessions_wow_percent: >
+        ((current_week_organic_sessions - previous_week_organic_sessions)
+        / previous_week_organic_sessions) * 100
+
+      advertising_sessions_wow_percent: >
+        ((current_week_advertising_sessions - previous_week_advertising_sessions)
+        / previous_week_advertising_sessions) * 100
+
+      organic_absolute_change: >
+        current_week_organic_sessions - previous_week_organic_sessions
+
+      advertising_absolute_change: >
+        current_week_advertising_sessions - previous_week_advertising_sessions
+
+
+    input_fields:
+
+      total_sessions:
+        field: "通販（全体） セッション"
+        required: true
+
+      organic_sessions:
+        field: "通販（全体） オーガニックサーチ セッション"
+        required: true
+
+      advertising_sessions:
+        field: "通販（全体） ペイド系合算 セッション"
+        required: true
+
+
+    evaluation:
+
+      # ------------------------------------------------------
+      # OK
+      # ------------------------------------------------------
+
+      - condition: "abs(total_sessions_wow_percent) < 3.9"
+
+        result: OK
+
+        reason: >
+          Total Sessions changed by less than 3.9% compared
+          with the previous week.
+        reason_ja: >
+          合計セッションの前週比の変化が 3.9% 未満です。
+
+        cause: null
+        countermeasure: null
+        feedback: null
+
+
+      # ------------------------------------------------------
+      # NG - Total Sessions increased
+      # ------------------------------------------------------
+
+      - condition: "total_sessions_wow_percent >= 3.9"
+
+        result: NG
+
+        reason: >
+          Total Sessions increased by 3.9% or more compared
+          with the previous week.
+        reason_ja: >
+          合計セッションが前週比で 3.9% 以上増加しました。
+
+        cause:
+          type: traffic_increase
+
+        analysis:
+          compare:
+            - organic_sessions_wow_percent
+            - advertising_sessions_wow_percent
+
+          primary_contributor:
+            rule: >
+              Compare the absolute increase in Organic Sessions
+              and Advertising Sessions. The larger increase is
+              treated as the primary contributor.
+
+        countermeasure:
+          action: >
+            Review the traffic source with the larger increase
+            and identify the factors contributing to the increase.
+          action_ja: >
+            増加が大きい流入元を確認し、増加に寄与した要因を特定する。
+
+        feedback:
+          message: >
+            Total Sessions increased significantly.
+            Please compare Organic and Advertising traffic
+            to identify the main contributor to the increase.
+          message_ja: >
+            合計セッションが大きく増加しました。オーガニック流入と広告流入を比較し、増加の主な要因を特定してください。
+
+
+      # ------------------------------------------------------
+      # NG - Total Sessions decreased
+      # ------------------------------------------------------
+
+      - condition: "total_sessions_wow_percent <= -3.9"
+
+        result: NG
+
+        reason: >
+          Total Sessions decreased by 3.9% or more compared
+          with the previous week.
+        reason_ja: >
+          合計セッションが前週比で 3.9% 以上減少しました。
+
+        source_analysis:
+
+          # Organic decreased / Advertising did not decrease
+
+          - condition: >
+              organic_sessions_wow_percent < 0
+              AND advertising_sessions_wow_percent >= 0
+
+            cause:
+              type: organic_traffic_decrease
+
+              description: >
+                Organic Sessions decreased while Advertising
+                Sessions did not decrease.
+              description_ja: >
+                広告のセッションは減少していない一方で、オーガニックのセッションが減少しました。
+
+            primary_cause: Organic
+
+            countermeasure:
+              action: >
+                Investigate the Organic traffic decrease using GSC.
+                Identify affected queries and pages and check
+                impressions, clicks, CTR, and position.
+              action_ja: >
+                GSC を使ってオーガニック流入の減少を調査する。影響を受けたクエリとページを特定し、表示回数、クリック数、CTR、掲載順位を確認する。
+
+            feedback:
+              team: SEO
+              message: >
+                Organic traffic decreased compared with the previous week.
+                Please check search ranking changes, impressions, CTR,
+                and major query/page performance to identify the cause
+                of the decrease.
+              message_ja: >
+                オーガニック流入が前週より減少しました。検索順位の変化、表示回数、CTR、主要なクエリ・ページのパフォーマンスを確認し、減少の原因を特定してください。
+
+            next_step:
+              investigation_rule: GSC_R01
+
+
+          # Advertising decreased / Organic did not decrease
+
+          - condition: >
+              advertising_sessions_wow_percent < 0
+              AND organic_sessions_wow_percent >= 0
+
+            cause:
+              type: advertising_traffic_decrease
+
+              description: >
+                Advertising Sessions decreased while Organic
+                Sessions did not decrease.
+              description_ja: >
+                オーガニックのセッションは減少していない一方で、広告のセッションが減少しました。
+
+            primary_cause: Advertising
+
+            countermeasure:
+              action: >
+                Review advertising spend, impressions, clicks,
+                campaign changes, targeting, and landing pages.
+              action_ja: >
+                広告費、表示回数、クリック数、キャンペーンの変更、ターゲティング、ランディングページを確認する。
+
+            feedback:
+              team: Advertising
+              message: >
+                Advertising traffic decreased compared with the previous week.
+                Please check recent advertising campaign performance,
+                spend, impressions, clicks, and campaign-level changes
+                to identify the cause of the decrease.
+              message_ja: >
+                広告流入が前週より減少しました。最近の広告キャンペーンのパフォーマンス、広告費、表示回数、クリック数、キャンペーン単位の変更を確認し、減少の原因を特定してください。
+
+
+          # Both decreased
+
+          - condition: >
+              organic_sessions_wow_percent < 0
+              AND advertising_sessions_wow_percent < 0
+
+            cause:
+              type: both_traffic_sources_decreased
+
+            analysis:
+              organic_absolute_decrease: >
+                previous_week_organic_sessions
+                - current_week_organic_sessions
+
+              advertising_absolute_decrease: >
+                previous_week_advertising_sessions
+                - current_week_advertising_sessions
+
+              primary_cause:
+                rule: >
+                  The traffic source with the larger absolute
+                  session decrease is the primary contributor.
+
+            countermeasure:
+              organic_primary: >
+                Investigate Organic traffic using GSC.
+                Check queries, pages, clicks, impressions,
+                CTR, and position.
+              organic_primary_ja: >
+                GSC を使ってオーガニック流入を調査する。クエリ、ページ、クリック数、表示回数、CTR、掲載順位を確認する。
+
+              advertising_primary: >
+                Investigate Advertising traffic.
+                Check spend, impressions, clicks, campaign
+                changes, targeting, and landing pages.
+              advertising_primary_ja: >
+                広告流入を調査する。広告費、表示回数、クリック数、キャンペーンの変更、ターゲティング、ランディングページを確認する。
+
+              equal_contribution: >
+                Investigate both Organic and Advertising traffic.
+              equal_contribution_ja: >
+                オーガニック流入と広告流入の両方を調査する。
+
+            feedback:
+              organic_primary:
+                team: SEO
+                message: >
+                  Both Organic and Advertising traffic decreased.
+                  Organic traffic had the larger decrease and is
+                  treated as the primary contributor. Please investigate
+                  affected queries, pages, rankings, impressions, and CTR.
+                message_ja: >
+                  オーガニック流入と広告流入の両方が減少しました。オーガニック流入の減少の方が大きいため、主な要因とします。影響を受けたクエリ、ページ、検索順位、表示回数、CTR を調査してください。
+
+              advertising_primary:
+                team: Advertising
+                message: >
+                  Both Organic and Advertising traffic decreased.
+                  Advertising traffic had the larger decrease and is
+                  treated as the primary contributor. Please investigate
+                  spend, impressions, clicks, campaigns, and targeting.
+                message_ja: >
+                  オーガニック流入と広告流入の両方が減少しました。広告流入の減少の方が大きいため、主な要因とします。広告費、表示回数、クリック数、キャンペーン、ターゲティングを調査してください。
+
+              equal_contribution:
+                team: SEO_and_Advertising
+                message: >
+                  Both Organic and Advertising traffic decreased
+                  by the same amount. Please investigate both
+                  traffic sources.
+                message_ja: >
+                  オーガニック流入と広告流入が同じ量だけ減少しました。両方の流入元を調査してください。
+
+
+  # ==========================================================
+  # GA4 RULE 2
+  # Purchase Efficiency - CVR
+  # ==========================================================
+
+  - rule_id: GA4_R02
+    rule_name: Purchase Efficiency - CVR
+    rule_name_ja: 購買効率 - CVR
+    data_source: GA4
+    metric: CVR
+
+    threshold:
+      type: relative_change
+      value: 0.7
+      unit: percent
+
+    comparison:
+      period: WoW
+      current_period: 7_days
+      previous_period: 7_days
+
+    input_fields:
+
+      sessions:
+        field: "通販（全体） セッション"
+        required: true
+
+      purchases:
+        field: "通販（全体） e コマース購入数"
+        required: true
+
+
+    formula:
+
+      current_cvr: >
+        (current_week_purchases / current_week_sessions) * 100
+
+      previous_cvr: >
+        (previous_week_purchases / previous_week_sessions) * 100
+
+      cvr_wow_percent: >
+        ((current_cvr - previous_cvr) / previous_cvr) * 100
+
+      sessions_wow_percent: >
+        ((current_week_sessions - previous_week_sessions)
+        / previous_week_sessions) * 100
+
+      purchases_wow_percent: >
+        ((current_week_purchases - previous_week_purchases)
+        / previous_week_purchases) * 100
+
+
+    evaluation:
+
+      # ------------------------------------------------------
+      # OK
+      # ------------------------------------------------------
+
+      - condition: "abs(cvr_wow_percent) < 0.7"
+
+        result: OK
+
+        reason: >
+          CVR changed by less than 0.7% relative WoW.
+        reason_ja: >
+          CVR の前週比の相対変化が 0.7% 未満です。
+
+        cause: null
+        countermeasure: null
+        feedback: null
+
+
+      # ------------------------------------------------------
+      # NG - CVR increased
+      # ------------------------------------------------------
+
+      - condition: "cvr_wow_percent >= 0.7"
+
+        result: NG
+
+        reason: >
+          CVR increased by 0.7% or more relative WoW.
+        reason_ja: >
+          CVR が前週比（相対）で 0.7% 以上増加しました。
+
+        cause:
+          type: conversion_improvement
+
+        countermeasure:
+          action: >
+            Review changes in Sessions and Purchases and identify
+            the factors contributing to the improvement.
+          action_ja: >
+            セッションと購入数の変化を確認し、改善に寄与した要因を特定する。
+
+        feedback:
+          message: >
+            CVR increased significantly compared with the previous week.
+            Please review changes in Sessions, Purchases, traffic sources,
+            products, and pages to identify the factors contributing
+            to the improvement.
+          message_ja: >
+            CVR が前週と比べて大きく上昇しました。セッション、購入数、流入元、商品、ページの変化を確認し、改善に寄与した要因を特定してください。
+
+
+      # ------------------------------------------------------
+      # NG - CVR decreased
+      # ------------------------------------------------------
+
+      - condition: "cvr_wow_percent <= -0.7"
+
+        result: NG
+
+        reason: >
+          CVR decreased by 0.7% or more relative WoW.
+        reason_ja: >
+          CVR が前週比（相対）で 0.7% 以上減少しました。
+
+        patterns:
+
+          # Sessions increased but purchases decreased/flat
+
+          - condition: >
+              sessions_wow_percent > 0
+              AND purchases_wow_percent <= 0
+
+            cause:
+              type: traffic_quality_issue
+
+            description: >
+              Sessions increased but Purchases remained flat
+              or decreased. The additional traffic did not
+              generate corresponding purchases.
+            description_ja: >
+              セッションは増加しましたが、購入数は横ばいまたは減少しました。増えた流入が購入につながっていません。
+
+            countermeasure:
+              action: >
+                Check traffic quality, landing pages, search intent,
+                Organic traffic, Advertising traffic, and campaign
+                targeting. Optimize low-converting traffic sources
+                and landing pages.
+              action_ja: >
+                流入の質、ランディングページ、検索意図、オーガニック流入、広告流入、キャンペーンのターゲティングを確認する。コンバージョンの低い流入元とランディングページを最適化する。
+
+            feedback:
+              team: SEO_and_Advertising
+              message: >
+                CVR decreased while Sessions increased and Purchases
+                remained flat or decreased. Please check traffic quality,
+                landing pages, search intent, and campaign targeting.
+              message_ja: >
+                セッションが増加し購入数が横ばいまたは減少して、CVR が低下しました。流入の質、ランディングページ、検索意図、キャンペーンのターゲティングを確認してください。
+
+
+          # Sessions flat/decreased and purchases decreased
+
+          - condition: >
+              sessions_wow_percent <= 0
+              AND purchases_wow_percent < 0
+
+            cause:
+              type: conversion_side_issue
+
+            description: >
+              Sessions did not increase and Purchases decreased.
+              Investigate product, pricing, availability, product
+              pages, UX, and checkout-related factors.
+            description_ja: >
+              セッションは増加せず、購入数が減少しました。商品、価格、在庫状況、商品ページ、UX、購入手続きに関する要因を調査してください。
+
+            countermeasure:
+              action: >
+                Check product pages, pricing, availability,
+                page UX, and checkout flow. Identify the point
+                where conversion performance declined.
+              action_ja: >
+                商品ページ、価格、在庫状況、ページの UX、購入手続きの流れを確認する。コンバージョンのパフォーマンスが低下した箇所を特定する。
+
+            feedback:
+              team: Ecommerce
+              message: >
+                CVR decreased while Sessions did not increase
+                and Purchases decreased. Please check product pages,
+                pricing, availability, page UX, and checkout flow.
+              message_ja: >
+                セッションが増加せず購入数が減少して、CVR が低下しました。商品ページ、価格、在庫状況、ページの UX、購入手続きの流れを確認してください。
+
+
+          # Both Sessions and Purchases increased,
+          # but CVR decreased
+
+          - condition: >
+              sessions_wow_percent > 0
+              AND purchases_wow_percent > 0
+              AND cvr_wow_percent < 0
+
+            cause:
+              type: traffic_growth_outpaced_purchase_growth
+
+            description: >
+              Both Sessions and Purchases increased, but Sessions
+              increased faster than Purchases.
+            description_ja: >
+              セッションと購入数はともに増加しましたが、セッションの増加が購入数の増加を上回りました。
+
+            countermeasure:
+              action: >
+                Identify traffic sources and landing pages where
+                Sessions increased but conversion performance was low.
+                Review traffic quality, search intent, targeting,
+                and landing page relevance.
+              action_ja: >
+                セッションが増えた一方でコンバージョンのパフォーマンスが低かった流入元とランディングページを特定する。流入の質、検索意図、ターゲティング、ランディングページの関連性を確認する。
+
+            feedback:
+              team: SEO_and_Advertising
+              message: >
+                Sessions and Purchases both increased, but CVR decreased.
+                Please identify low-converting traffic sources and
+                landing pages and review their quality and relevance.
+              message_ja: >
+                セッションと購入数はともに増加しましたが、CVR は低下しました。コンバージョンの低い流入元とランディングページを特定し、その質と関連性を確認してください。
+
+
+  # ==========================================================
+  # GSC INVESTIGATION
+  # ==========================================================
+  #
+  # IMPORTANT:
+  # GSC_R01 is NOT an independent NG/OK measurement rule.
+  #
+  # It is triggered only when:
+  #
+  # GA4_R01 = NG
+  # AND
+  # Organic Sessions decreased
+  #
+  # Purpose:
+  # Identify evidence that may explain the Organic traffic decrease.
+  # ==========================================================
+
+  - rule_id: GSC_R01
+    rule_name: Organic Traffic Decrease Investigation
+    rule_name_ja: オーガニック流入減少の調査
+    data_source: GSC
+    type: investigation
+    trigger:
+      rule_id: GA4_R01
+      conditions:
+        - "result == NG"
+        - "organic_sessions_wow_percent < 0"
+
+    purpose:
+      description: >
+        Investigate the possible reasons for the Organic traffic
+        decrease detected by GA4.
+      description_ja: >
+        GA4 で検知したオーガニック流入の減少について、考えられる理由を調査する。
+
+    input_files:
+
+      query:
+        file: "クエリ.csv"
+        purpose:
+          - clicks
+          - impressions
+          - ctr
+          - position
+          - query_performance
+
+      page:
+        file: "ページ.csv"
+        purpose:
+          - clicks
+          - impressions
+          - ctr
+          - position
+          - affected_pages
+
+      device:
+        file: "デバイス.csv"
+        purpose:
+          - mobile_performance
+          - desktop_performance
+          - device_comparison
+
+      country:
+        file: "国.csv"
+        purpose:
+          - country_performance
+
+      search_appearance:
+        file: "検索での見え方.csv"
+        purpose:
+          - search_appearance_performance
+
+      performance_trend:
+        file: "平均読み込み時間のチャート.csv"
+        purpose:
+          - performance_trend_reference
+
+
+    investigation:
+
+      # ------------------------------------------------------
+      # Query investigation
+      # ------------------------------------------------------
+
+      - investigation_id: GSC_QUERY
+        source: query
+
+        check:
+          - clicks
+          - impressions
+          - ctr
+          - position
+
+        identify:
+          - queries_with_click_decrease
+          - queries_with_impression_decrease
+          - queries_with_ctr_decrease
+          - queries_with_position_drop
+
+        interpretation:
+          clicks_decrease: >
+            Organic search traffic contribution decreased for
+            the affected query.
+          clicks_decrease_ja: >
+            該当クエリのオーガニック検索流入への寄与が減少しました。
+
+          impressions_decrease: >
+            Search visibility for the affected query decreased.
+          impressions_decrease_ja: >
+            該当クエリの検索での露出が減少しました。
+
+          ctr_decrease: >
+            Search visibility remained available, but the percentage
+            of users clicking the result decreased.
+          ctr_decrease_ja: >
+            検索での露出は維持されていますが、結果をクリックしたユーザーの割合が減少しました。
+
+          position_drop: >
+            Search ranking performance deteriorated for the query.
+          position_drop_ja: >
+            該当クエリの検索順位のパフォーマンスが悪化しました。
+
+
+      # ------------------------------------------------------
+      # Page investigation
+      # ------------------------------------------------------
+
+      - investigation_id: GSC_PAGE
+        source: page
+
+        check:
+          - clicks
+          - impressions
+          - ctr
+          - position
+
+        identify:
+          - pages_with_click_decrease
+          - pages_with_impression_decrease
+          - pages_with_ctr_decrease
+          - pages_with_position_drop
+
+        interpretation:
+          clicks_decrease: >
+            Organic traffic contribution from the affected page decreased.
+          clicks_decrease_ja: >
+            該当ページからのオーガニック流入への寄与が減少しました。
+
+          impressions_decrease: >
+            Search visibility of the affected page decreased.
+          impressions_decrease_ja: >
+            該当ページの検索での露出が減少しました。
+
+          ctr_decrease: >
+            The page appeared in search results but received
+            fewer clicks relative to impressions.
+          ctr_decrease_ja: >
+            ページは検索結果に表示されましたが、表示回数に対するクリック数が減少しました。
+
+          position_drop: >
+            The page's search ranking performance deteriorated.
+          position_drop_ja: >
+            ページの検索順位のパフォーマンスが悪化しました。
+
+
+      # ------------------------------------------------------
+      # Device investigation
+      # ------------------------------------------------------
+
+      - investigation_id: GSC_DEVICE
+        source: device
+
+        check:
+          - clicks
+          - impressions
+          - ctr
+          - position
+
+        identify:
+          - affected_device
+
+        interpretation: >
+          Identify whether the Organic traffic decrease is concentrated
+          on Mobile, Desktop, or another device category.
+        interpretation_ja: >
+          オーガニック流入の減少がモバイル、パソコン、その他のデバイスのどれに集中しているかを特定する。
+
+
+      # ------------------------------------------------------
+      # Search appearance investigation
+      # ------------------------------------------------------
+
+      - investigation_id: GSC_SEARCH_APPEARANCE
+        source: search_appearance
+
+        check:
+          - clicks
+          - impressions
+          - ctr
+
+        identify:
+          - affected_search_appearance
+
+        interpretation: >
+          Identify whether the decrease is concentrated in a
+          particular search appearance type.
+        interpretation_ja: >
+          減少が特定の検索での見え方に集中しているかを特定する。
+
+
+    cause_identification:
+
+      priority_order:
+
+        - condition:
+            "queries_with_click_decrease AND position_drop"
+          cause: >
+            Possible ranking deterioration for affected queries.
+          cause_ja: >
+            影響を受けたクエリで検索順位が悪化した可能性があります。
+
+        - condition:
+            "queries_with_impression_decrease"
+          cause: >
+            Possible decrease in search visibility for affected queries.
+          cause_ja: >
+            影響を受けたクエリで検索での露出が減少した可能性があります。
+
+        - condition:
+            "pages_with_click_decrease AND position_drop"
+          cause: >
+            Possible ranking deterioration affecting specific pages.
+          cause_ja: >
+            特定のページに影響する検索順位の悪化の可能性があります。
+
+        - condition:
+            "pages_with_ctr_decrease AND impressions_stable"
+          cause: >
+            Possible decrease in search result click-through performance.
+          cause_ja: >
+            検索結果のクリック率が低下した可能性があります。
+
+        - condition:
+            "affected_device"
+          cause: >
+            Organic traffic decrease is concentrated on a specific device.
+          cause_ja: >
+            オーガニック流入の減少は特定のデバイスに集中しています。
+
+        - condition:
+            "affected_search_appearance"
+          cause: >
+            Organic traffic decrease is concentrated in a specific
+            search appearance type.
+          cause_ja: >
+            オーガニック流入の減少は特定の検索での見え方に集中しています。
+
+      fallback: >
+        No single cause can be determined from the available GSC data.
+        Further investigation is required.
+      fallback_ja: >
+        利用可能な GSC のデータからは単一の原因を特定できません。さらなる調査が必要です。
+
+
+    countermeasure_mapping:
+
+      ranking_drop:
+        action: >
+          Review affected queries and pages. Check recent SEO changes,
+          content relevance, search intent alignment, internal linking,
+          and competing search results. Optimize affected pages where
+          appropriate.
+        action_ja: >
+          影響を受けたクエリとページを確認する。最近の SEO 変更、コンテンツの関連性、検索意図との整合、内部リンク、競合する検索結果を確認し、必要に応じて該当ページを最適化する。
+
+      impression_drop:
+        action: >
+          Review search visibility, affected queries, indexed pages,
+          content relevance, and search demand. Investigate why
+          impressions decreased.
+        action_ja: >
+          検索での露出、影響を受けたクエリ、インデックスされたページ、コンテンツの関連性、検索需要を確認し、表示回数が減少した理由を調査する。
+
+      ctr_drop:
+        action: >
+          Review page titles, meta descriptions, search-result relevance,
+          and search intent alignment. Improve SERP presentation where
+          appropriate.
+        action_ja: >
+          ページのタイトル、メタディスクリプション、検索結果との関連性、検索意図との整合を確認し、必要に応じて検索結果での見せ方を改善する。
+
+      page_specific_drop:
+        action: >
+          Review the affected pages for content quality, technical SEO,
+          internal linking, indexing, and relevance to target queries.
+        action_ja: >
+          影響を受けたページのコンテンツの質、テクニカル SEO、内部リンク、インデックス、対象クエリとの関連性を確認する。
+
+      device_specific_drop:
+        action: >
+          Review mobile or desktop experience, page usability,
+          performance, and technical issues for the affected device.
+        action_ja: >
+          影響を受けたデバイスについて、モバイルまたはパソコンの体験、ページの使いやすさ、パフォーマンス、技術的な問題を確認する。
+
+      no_clear_cause:
+        action: >
+          Do not assign a definitive cause. Report the observed
+          performance changes and recommend further investigation.
+        action_ja: >
+          確定的な原因は割り当てない。観測されたパフォーマンスの変化を報告し、さらなる調査を推奨する。
+
+
+    output:
+
+      required_fields:
+        - investigation_id
+        - affected_queries
+        - affected_pages
+        - clicks_change
+        - impressions_change
+        - ctr_change
+        - position_change
+        - affected_device
+        - affected_search_appearance
+        - cause
+        - evidence
+        - countermeasure
+        - confidence
+
+      confidence_values:
+        - high
+        - medium
+        - low
+        - insufficient_data

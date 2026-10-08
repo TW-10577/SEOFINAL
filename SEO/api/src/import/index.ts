@@ -2,27 +2,57 @@ import type { Issue, Period, Source, Upload, UploadDetail } from '@seo/shared';
 import type { AppConfig } from '../config.ts';
 import { SCHEMA_VERSION, nowIso, parseJson, type DB } from '../db.ts';
 import { dec, enc, tx, type LText } from '../i18n.ts';
-import { looksLikeGa4, parseGa4 } from './ga4.ts';
-import { fileTypeOf, readGrids, type FileType } from './grid.ts';
-import { looksLikeGsc, parseGsc } from './gsc.ts';
+import { detectSource, type SourceDetection } from './detect.ts';
+import { parseGa4 } from './ga4.ts';
+import { FORMAT_LABEL, ProcessingFailed, UnsupportedFormat, extract, extractSync, type Extraction } from './formats.ts';
+import { parseGsc } from './gsc.ts';
 import type { ParsedTable } from './types.ts';
 
 export interface IncomingFile {
   fileName: string;
   buffer: Buffer;
+  /** Pre-extracted tables (or the extraction failure) from importUploads. */
+  extraction?: Extraction | UnsupportedFormat | ProcessingFailed;
 }
 
 export interface ImportOptions {
-  source: Source;
+  /** Expected source. Omitted (the dashboard): detected per file from its contents. */
+  source?: Source | null;
   /** Period for files whose rows carry no date (e.g. GSC 3-month totals). */
   period?: Period | null;
 }
 
+/** imported: SEO data stored · unsupported: the file format cannot be read · failed: readable, but no usable SEO data. */
+type Outcome = 'imported' | 'unsupported' | 'failed';
+
 interface ParsedFile {
   file: IncomingFile;
-  fileType: FileType | null;
+  /** Detected format, e.g. csv, xlsx, pdf; or what an unsupported file was recognised as. */
+  format: string;
   tables: ParsedTable[];
   errors: Issue[];
+  outcome: Outcome;
+  /** GA4 or GSC as detected from the contents; null when nothing was recognised. */
+  source: Source | null;
+  detection: SourceDetection;
+}
+
+/**
+ * Imports one batch from the upload API: detects each file's format from its contents,
+ * extracts its tables (PDF and Word need async libraries), then runs importFiles.
+ */
+export async function importUploads(db: DB, cfg: AppConfig, files: IncomingFile[], opts: ImportOptions): Promise<UploadDetail[]> {
+  const prepared = await Promise.all(
+    files.map(async (f) => {
+      if (f.buffer.length === 0) return f;
+      try {
+        return { ...f, extraction: await extract(f.fileName, f.buffer) };
+      } catch (e) {
+        return { ...f, extraction: e instanceof UnsupportedFormat || e instanceof ProcessingFailed ? e : new ProcessingFailed((e as Error).message, (e as Error).message) };
+      }
+    }),
+  );
+  return importFiles(db, cfg, prepared, opts);
 }
 
 /**
@@ -30,8 +60,8 @@ interface ParsedFile {
  * Data Import page can show why. Undated GSC tabs take their period from, in order:
  * the period entered on upload, or a GSC daily chart in the same batch.
  */
-export function importFiles(db: DB, cfg: AppConfig, files: IncomingFile[], opts: ImportOptions): UploadDetail[] {
-  const parsed = files.map((f) => parseFile(f, opts.source));
+export async function importFiles(db: DB, cfg: AppConfig, files: IncomingFile[], opts: ImportOptions): Promise<UploadDetail[]> {
+  const parsed = files.map((f) => parseFile(f, opts.source ?? null));
 
   const batchDaily = parsed.flatMap((p) => p.tables).find((t) => t.structure === 'gsc-date' && t.period);
   for (const p of parsed)
@@ -50,7 +80,11 @@ export function importFiles(db: DB, cfg: AppConfig, files: IncomingFile[], opts:
         t.issues.push({ severity: 'warning', code: 'no-wow', message: bi('This export is a single total for the whole period: it has no time dimension, so it cannot be compared week on week.', 'このエクスポートは期間全体の合計で時間の次元がないため、前週比較はできません。') });
     }
 
-  return db.transaction(() => parsed.map((p) => persist(db, cfg, p, opts.source)))();
+  return db.transaction(async () => {
+    const out: UploadDetail[] = [];
+    for (const p of parsed) out.push(await persist(db, cfg, p));
+    return out;
+  });
 }
 
 const bi = (en: string, ja: string) => enc(tx(en, ja));
@@ -63,44 +97,75 @@ function joinNotes(notes: (string | null)[]): string | null {
   return list.length ? enc(tx(list.map((n) => n.en).join('; '), list.map((n) => n.ja).join('、'))) : null;
 }
 
-function parseFile(file: IncomingFile, source: Source): ParsedFile {
-  const fileType = fileTypeOf(file.fileName);
-  if (!fileType) return { file, fileType, tables: [], errors: [{ severity: 'error', code: 'unsupported-type', message: bi('Unsupported file type. Upload CSV or Excel (.xlsx).', '対応していないファイル形式です。CSV または Excel（.xlsx）をアップロードしてください。') }] };
-  if (file.buffer.length === 0) return { file, fileType, tables: [], errors: [{ severity: 'error', code: 'empty', message: bi('The file is empty.', 'ファイルが空です。') }] };
+function parseFile(file: IncomingFile, expected: Source | null): ParsedFile {
+  const fail = (outcome: Outcome, format: string, code: string, en: string, ja: string): ParsedFile => ({
+    file, format, tables: [], outcome, source: null, detection: { source: null, method: 'none', signals: [] }, errors: [{ severity: 'error', code, message: bi(en, ja) }],
+  });
+  if (file.buffer.length === 0) return fail('failed', 'empty', 'empty', 'The file is empty.', 'ファイルが空です。');
 
-  let grids;
-  try {
-    grids = readGrids(fileType, file.buffer);
-  } catch (e) {
-    return { file, fileType, tables: [], errors: [{ severity: 'error', code: 'invalid-file', message: bi(`The file could not be read: ${(e as Error).message}`, `ファイルを読み込めませんでした：${(e as Error).message}`) }] };
+  let extraction = file.extraction;
+  if (!extraction) {
+    try {
+      extraction = extractSync(file.fileName, file.buffer);
+    } catch (e) {
+      extraction = e as UnsupportedFormat | ProcessingFailed;
+    }
   }
+  if (extraction instanceof UnsupportedFormat)
+    return fail('unsupported', extraction.detected, 'unsupported-format', `Unsupported file format: ${extraction.en}`, `対応していないファイル形式：${extraction.ja}`);
+  if (extraction instanceof ProcessingFailed || extraction instanceof Error) {
+    const err = extraction as ProcessingFailed;
+    return fail('failed', 'unknown', 'processing-failed', `Processing failed: ${err.en ?? err.message}`, `処理に失敗しました：${err.ja ?? err.message}`);
+  }
+
   const tables: ParsedTable[] = [];
-  const errors: Issue[] = [];
-  for (const grid of grids) {
-    if (grid.rows.every((r) => r.every((c) => !c.trim()))) continue;
-    const where = grid.name ? tx(`Sheet "${grid.name}": `, `シート「${grid.name}」：`) : tx('');
-    const isGa4 = looksLikeGa4(grid);
-    const isGsc = !isGa4 && looksLikeGsc(grid);
-    if (!isGa4 && !isGsc) {
-      errors.push({ severity: 'error', code: 'unknown-structure', message: bi(`${where.en}Not a recognised GA4 Explorations or Search Console export.`, `${where.ja}GA4 探索または Search Console のエクスポートとして認識できません。`) });
+  const errors: Issue[] = extraction.notes.map((n) => ({ severity: 'warning' as const, code: 'entry-skipped', message: bi(n.en, n.ja) }));
+  const named = extraction.grids.filter((g) => !g.rows.every((r) => r.every((c) => !c.trim())));
+  let detection: SourceDetection | null = null;
+  const label = (src: Source) => (src === 'GA4' ? 'GA4' : 'Google Search Console');
+  for (const grid of named) {
+    const where = grid.name ? tx(`"${grid.name}": `, `「${grid.name}」：`) : tx('');
+    let det = detectSource(grid);
+    if (expected) {
+      if (det.source && det.source !== expected) {
+        errors.push({ severity: 'error', code: 'source-mismatch', message: bi(`${where.en}${label(expected)} was selected, but the contents are ${label(det.source)} data (${det.signals.join(', ')}).`, `${where.ja}${label(expected)} が選択されましたが、内容は ${label(det.source)} のデータです（${det.signals.join('、')}）。`) });
+        detection ??= det;
+        continue;
+      }
+      if (!det.source) det = { ...det, source: expected, method: 'user' };
+    }
+    detection ??= det;
+    if (!det.source) {
+      errors.push({ severity: 'error', code: 'unknown-source', message: bi(`${where.en}Source: Unknown — the contents match neither GA4 nor Google Search Console${det.signals.length ? ` clearly (fields: ${det.signals.join(', ')})` : ''}. The file may be missing its header rows (e.g. the GA4 セグメント / 日付 rows or the Search Console column names); upload the export with its headers.`, `${where.ja}ソース：不明 — 内容が GA4 と Google Search Console のどちらにも明確に一致しません${det.signals.length ? `（項目：${det.signals.join('、')}）` : ''}。見出し行（GA4 のセグメント・日付行や Search Console の列名）が欠けている可能性があります。見出し付きのエクスポートをアップロードしてください。`) });
       continue;
     }
-    const detected: Source = isGa4 ? 'GA4' : 'GSC';
-    if (detected !== source) {
-      errors.push({ severity: 'error', code: 'source-mismatch', message: bi(`${where.en}Source "${source}" was selected, but the file contents are a ${detected} export.`, `${where.ja}ソースに「${source}」が選択されていますが、ファイルの内容は ${detected} のエクスポートです。`) });
+    // One upload holds one source; a second source in the same file is reported, not mixed in.
+    const fileSource = tables[0]?.source ?? detection.source ?? det.source;
+    if (det.source !== fileSource) {
+      errors.push({ severity: 'error', code: 'mixed-sources', message: bi(`${where.en}This table is ${label(det.source)} data, but the file also contains ${label(fileSource)} data. Upload them as separate files.`, `${where.ja}この表は ${label(det.source)} のデータですが、同じファイルに ${label(fileSource)} のデータも含まれています。別々のファイルでアップロードしてください。`) });
       continue;
     }
-    const result = isGa4 ? parseGa4(grid) : parseGsc(grid);
+    // Apply only the detected source's parser and validation; never GA4 rules to GSC data or the reverse.
+    const result = det.source === 'GA4' ? parseGa4(grid) : parseGsc(grid);
     if (result.ok) tables.push(result.table);
-    else errors.push({ ...result.issue, message: prefix(where, result.issue.message) });
+    else if (det.method === 'layout') errors.push({ ...result.issue, message: prefix(where, result.issue.message) });
+    else {
+      const how = det.method === 'user' ? tx('selected', '選択') : tx(`detected from fields: ${det.signals.join(', ')}`, `項目から判定：${det.signals.join('、')}`);
+      const why = { en: dec(result.issue.message).en, ja: dec(result.issue.message).ja };
+      const layoutEn = det.source === 'GA4' ? 'a GA4 Explorations export (セグメント / segment header row with metrics per segment)' : 'a Search Console Performance export (first column クエリ / ページ / 日付 / デバイス / 国 / 検索での見え方)';
+      const layoutJa = det.source === 'GA4' ? 'GA4 探索のエクスポート（セグメント見出し行とセグメント別の指標）' : 'Search Console 検索パフォーマンスのエクスポート（先頭列がクエリ / ページ / 日付 / デバイス / 国 / 検索での見え方）';
+      errors.push({ severity: 'error', code: 'unsupported-layout', message: bi(`${where.en}Source: ${label(det.source)} (${how.en}), but the table is not laid out as ${layoutEn}, so the ${det.source} rules cannot be applied. ${why.en}`, `${where.ja}ソース：${label(det.source)}（${how.ja}）ですが、表が${layoutJa}の形式ではないため、${det.source} のルールを適用できません。${why.ja}`) });
+    }
   }
-  if (!tables.length && !errors.length) errors.push({ severity: 'error', code: 'empty', message: bi('The file contains no data.', 'ファイルにデータがありません。') });
-  return { file, fileType, tables, errors };
+  if (!tables.length && !errors.some((e) => e.severity === 'error'))
+    errors.push({ severity: 'error', code: 'empty', message: bi(`No data found in this ${FORMAT_LABEL[extraction.format]} file.`, `この ${FORMAT_LABEL[extraction.format]} ファイルにデータがありません。`) });
+  const final = detection ?? { source: null, method: 'none' as const, signals: [] };
+  return { file, format: extraction.format, tables, errors, outcome: tables.length ? 'imported' : 'failed', source: tables[0]?.source ?? final.source, detection: final };
 }
 
-function persist(db: DB, cfg: AppConfig, p: ParsedFile, source: Source): UploadDetail {
-  const rejected = p.tables.length === 0;
-  const issues: Issue[] = [...p.errors, ...p.tables.flatMap((t) => t.issues.map((i) => (t.sheet ? { ...i, message: prefix(tx(`Sheet "${t.sheet}": `, `シート「${t.sheet}」：`), i.message) } : i)))];
+async function persist(db: DB, cfg: AppConfig, p: ParsedFile): Promise<UploadDetail> {
+  const rejected = p.outcome !== 'imported';
+  const issues: Issue[] = [...p.errors, ...p.tables.flatMap((t) => t.issues.map((i) => (t.sheet ? { ...i, message: prefix(tx(`"${t.sheet}": `, `「${t.sheet}」：`), i.message) } : i)))];
   const records = p.tables.flatMap((t) => t.records.filter((r) => r.status !== 'metadata' && r.status !== 'total'));
   const validRows = records.filter((r) => r.status === 'valid').length;
   const warnings = issues.filter((i) => i.severity === 'warning').length;
@@ -110,17 +175,13 @@ function persist(db: DB, cfg: AppConfig, p: ParsedFile, source: Source): UploadD
     ? { start: dated.map((t) => t.period!.start).sort()[0]!, end: dated.map((t) => t.period!.end).sort().at(-1)! }
     : null;
 
-  const uploadId = Number(
-    db
-      .prepare(
+  const uploadId = await db.insert(
         `INSERT INTO uploads (file_name, source, file_type, structure, uploaded_at, analysis_period_start, analysis_period_end,
            period_note, row_count, valid_row_count, validation_status, import_status, warning_count, error_count, schema_version, metadata_json)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(
         p.file.fileName,
-        source,
-        p.fileType ?? 'unknown',
+        p.source,
+        p.format,
         p.tables.map((t) => t.structure).join(', ') || null,
         nowIso(),
         period?.start ?? null,
@@ -129,63 +190,70 @@ function persist(db: DB, cfg: AppConfig, p: ParsedFile, source: Source): UploadD
         records.length,
         validRows,
         rejected ? 'invalid' : issues.length ? 'valid_with_warnings' : 'valid',
-        rejected ? 'rejected' : 'imported',
+        p.outcome,
         warnings,
         errors,
         SCHEMA_VERSION,
-        JSON.stringify(Object.fromEntries(p.tables.map((t) => [t.sheet ? `${t.structure} (${t.sheet})` : t.structure, t.metadata]))),
-      ).lastInsertRowid,
+        JSON.stringify({ detection: p.detection, ...Object.fromEntries(p.tables.map((t) => [t.sheet ? `${t.structure} (${t.sheet})` : t.structure, t.metadata])) }),
   );
 
-  const insIssue = db.prepare('INSERT INTO upload_issues (upload_id, severity, code, message, row_number, column_name) VALUES (?, ?, ?, ?, ?, ?)');
-  for (const i of issues) insIssue.run(uploadId, i.severity, i.code, i.message, i.row ?? null, i.column ?? null);
+  await db.run('INSERT INTO upload_files (upload_id, content) VALUES (?, ?)', uploadId, p.file.buffer);
 
-  const insRaw = db.prepare('INSERT INTO raw_records (upload_id, table_name, row_number, status, values_json, issues_json) VALUES (?, ?, ?, ?, ?, ?)');
-  const insData = db.prepare(
+  for (const i of issues)
+    await db.run('INSERT INTO upload_issues (upload_id, severity, code, message, row_number, column_name) VALUES (?, ?, ?, ?, ?, ?)', uploadId, i.severity, i.code, i.message, i.row ?? null, i.column ?? null);
+
+  const DATA_COLS = 19;
+  const dataSql = (rows: number) =>
     `INSERT INTO imported_data (upload_id, source_record_id, source, structure, data_date, period_start, period_end, page_url, query,
        segment, traffic_source, device, country, search_appearance, metric_name, source_metric_name, metric_value, is_valid, invalid_reason)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  );
+     VALUES ${Array.from({ length: rows }, () => `(${Array(DATA_COLS).fill('?').join(', ')})`).join(', ')}`;
   const roleOf = (segment: string | null | undefined) =>
     segment ? (Object.entries(cfg.segments).find(([, m]) => m.value === segment)?.[0] ?? null) : null;
 
   for (const t of p.tables) {
     const tableName = t.sheet ? `${t.structure} (${t.sheet})` : t.structure;
     for (const r of t.records) {
-      const rawId = Number(insRaw.run(uploadId, tableName, r.rowNumber, r.status, JSON.stringify(r.values), JSON.stringify(r.issues)).lastInsertRowid);
-      for (const d of r.data) {
-        insData.run(
-          uploadId, rawId, t.source, t.structure, d.dataDate,
-          d.dataDate ?? t.period?.start ?? null, d.dataDate ?? t.period?.end ?? null,
-          d.pageUrl ?? null, d.query ?? null, d.segment ?? null, roleOf(d.segment),
-          d.device ?? null, d.country ?? null, d.searchAppearance ?? null,
-          d.metricName, d.sourceMetricName, d.metricValue, d.isValid ? 1 : 0, d.invalidReason ?? null,
+      const rawId = await db.insert(
+        'INSERT INTO raw_records (upload_id, table_name, row_number, status, values_json, issues_json) VALUES (?, ?, ?, ?, ?, ?)',
+        uploadId, tableName, r.rowNumber, r.status, JSON.stringify(r.values), JSON.stringify(r.issues),
+      );
+      // One statement per source line (its values in file order), so ids follow the same order as before.
+      if (r.data.length)
+        await db.run(
+          dataSql(r.data.length),
+          ...r.data.flatMap((d) => [
+            uploadId, rawId, t.source, t.structure, d.dataDate,
+            d.dataDate ?? t.period?.start ?? null, d.dataDate ?? t.period?.end ?? null,
+            d.pageUrl ?? null, d.query ?? null, d.segment ?? null, roleOf(d.segment),
+            d.device ?? null, d.country ?? null, d.searchAppearance ?? null,
+            d.metricName, d.sourceMetricName, d.metricValue, d.isValid ? 1 : 0, d.invalidReason ?? null,
+          ]),
         );
-      }
     }
   }
-  if (!rejected) refreshOntologyObjects(db, cfg, uploadId);
-  return getUpload(db, uploadId)!;
+  if (!rejected) await refreshOntologyObjects(db, cfg, uploadId);
+  return (await getUpload(db, uploadId))!;
 }
 
 /** Page, Search Query, Query Classification and Traffic Source objects seen in an upload. */
-function refreshOntologyObjects(db: DB, cfg: AppConfig, uploadId: number) {
-  db.prepare(`INSERT OR IGNORE INTO pages (url) SELECT DISTINCT page_url FROM imported_data WHERE upload_id = ? AND page_url IS NOT NULL`).run(uploadId);
-  db.prepare(`INSERT OR IGNORE INTO search_queries (query) SELECT DISTINCT query FROM imported_data WHERE upload_id = ? AND query IS NOT NULL`).run(uploadId);
-  const queries = db.prepare('SELECT DISTINCT query FROM imported_data WHERE upload_id = ? AND query IS NOT NULL').pluck().all(uploadId) as string[];
-  const upsertClass = db.prepare(
-    `INSERT INTO query_classifications (query, classification_type, classification_value, rule_source) VALUES (?, 'brand_division', ?, ?)
-     ON CONFLICT (query, classification_type) DO UPDATE SET classification_value = excluded.classification_value, rule_source = excluded.rule_source`,
-  );
-  const ruleSource = cfg.brandTerms.confirmed ? 'config/rules.yaml gsc.brand_terms' : 'config/rules.yaml gsc.brand_terms (provisional, not confirmed)';
-  for (const q of queries) upsertClass.run(q, isBrandQuery(cfg, q) ? 'brand' : 'non-brand', ruleSource);
-  const segments = db.prepare('SELECT DISTINCT segment, traffic_source FROM imported_data WHERE upload_id = ? AND segment IS NOT NULL').all(uploadId) as { segment: string; traffic_source: string | null }[];
-  const upsertSeg = db.prepare(
-    `INSERT INTO traffic_sources (segment, role, confirmed) VALUES (?, ?, ?) ON CONFLICT (segment) DO UPDATE SET role = excluded.role, confirmed = excluded.confirmed`,
-  );
+async function refreshOntologyObjects(db: DB, cfg: AppConfig, uploadId: number) {
+  await db.run(`INSERT INTO pages (url) SELECT DISTINCT page_url FROM imported_data WHERE upload_id = ? AND page_url IS NOT NULL ON CONFLICT DO NOTHING`, uploadId);
+  await db.run(`INSERT INTO search_queries (query) SELECT DISTINCT query FROM imported_data WHERE upload_id = ? AND query IS NOT NULL ON CONFLICT DO NOTHING`, uploadId);
+  const queries = await db.values<string>('SELECT DISTINCT query FROM imported_data WHERE upload_id = ? AND query IS NOT NULL', uploadId);
+  const ruleSource = cfg.brandTerms.confirmed ? 'rules.yaml gsc.brand_terms' : 'rules.yaml gsc.brand_terms (provisional, not confirmed)';
+  for (const q of queries)
+    await db.run(
+      `INSERT INTO query_classifications (query, classification_type, classification_value, rule_source) VALUES (?, 'brand_division', ?, ?)
+       ON CONFLICT (query, classification_type) DO UPDATE SET classification_value = excluded.classification_value, rule_source = excluded.rule_source`,
+      q, isBrandQuery(cfg, q) ? 'brand' : 'non-brand', ruleSource,
+    );
+  const segments = await db.all<{ segment: string; traffic_source: string | null }>('SELECT DISTINCT segment, traffic_source FROM imported_data WHERE upload_id = ? AND segment IS NOT NULL', uploadId);
   for (const s of segments) {
     const role = s.traffic_source as keyof AppConfig['segments'] | null;
-    upsertSeg.run(s.segment, role, role ? (cfg.segments[role].confirmed ? 1 : 0) : 0);
+    await db.run(
+      `INSERT INTO traffic_sources (segment, role, confirmed) VALUES (?, ?, ?) ON CONFLICT (segment) DO UPDATE SET role = excluded.role, confirmed = excluded.confirmed`,
+      s.segment, role, role ? (cfg.segments[role].confirmed ? 1 : 0) : 0,
+    );
   }
 }
 
@@ -219,14 +287,14 @@ function toUpload(r: UploadRow): Upload {
   };
 }
 
-export function listUploads(db: DB): Upload[] {
-  return (db.prepare('SELECT * FROM uploads ORDER BY id DESC').all() as UploadRow[]).map(toUpload);
+export async function listUploads(db: DB): Promise<Upload[]> {
+  return (await db.all<UploadRow>('SELECT * FROM uploads ORDER BY id DESC')).map(toUpload);
 }
 
-export function getUpload(db: DB, id: number): UploadDetail | null {
-  const r = db.prepare('SELECT * FROM uploads WHERE id = ?').get(id) as UploadRow | undefined;
+export async function getUpload(db: DB, id: number): Promise<UploadDetail | null> {
+  const r = await db.get<UploadRow>('SELECT * FROM uploads WHERE id = ?', id);
   if (!r) return null;
-  const issues = (db.prepare('SELECT * FROM upload_issues WHERE upload_id = ? ORDER BY id').all(id) as UploadRow[]).map((i) => ({
+  const issues = (await db.all<UploadRow>('SELECT * FROM upload_issues WHERE upload_id = ? ORDER BY id', id)).map((i) => ({
     severity: i.severity,
     code: i.code,
     message: i.message,
@@ -236,6 +304,38 @@ export function getUpload(db: DB, id: number): UploadDetail | null {
   return { ...toUpload(r), issues };
 }
 
-export function deleteUpload(db: DB, id: number): boolean {
-  return db.prepare('DELETE FROM uploads WHERE id = ?').run(id).changes > 0;
+export async function deleteUpload(db: DB, id: number): Promise<boolean> {
+  return (await db.run('DELETE FROM uploads WHERE id = ?', id)) > 0;
+}
+
+/**
+ * Deletes an upload together with the measurement runs that used its data, unless the SEO team
+ * has recorded decisions on one of those runs (then nothing is deleted).
+ */
+export async function deleteUploadWithRuns(db: DB, id: number): Promise<{ deletedRuns: number[] } | { blockedBy: number[] }> {
+  return db.transaction(async () => {
+    const runs = await db.values<number>(
+        `SELECT DISTINCT m.run_id FROM measurement_sources ms
+         JOIN measurements m ON m.id = ms.measurement_id
+         JOIN imported_data d ON d.id = ms.imported_data_id
+         WHERE d.upload_id = ? ORDER BY m.run_id`,
+        id,
+    );
+    const decided: number[] = [];
+    for (const run of runs)
+      if (
+        ((await db.value<number>(
+            `SELECT COUNT(*) FROM state_events e WHERE
+               (e.entity = 'anomaly' AND e.entity_id IN (SELECT a.id FROM anomalies a JOIN measurements m ON m.id = a.measurement_id WHERE m.run_id = ?))
+            OR (e.entity = 'cause' AND e.entity_id IN (SELECT c.id FROM cause_hypotheses c JOIN anomalies a ON a.id = c.anomaly_id JOIN measurements m ON m.id = a.measurement_id WHERE m.run_id = ?))
+            OR (e.entity = 'countermeasure' AND e.entity_id IN (SELECT k.id FROM countermeasures k JOIN cause_hypotheses c ON c.id = k.cause_id JOIN anomalies a ON a.id = c.anomaly_id JOIN measurements m ON m.id = a.measurement_id WHERE m.run_id = ?))`,
+            run, run, run,
+        )) ?? 0) > 0
+      )
+        decided.push(run);
+    if (decided.length) return { blockedBy: decided };
+    for (const run of runs) await db.run('DELETE FROM measurement_runs WHERE id = ?', run);
+    await deleteUpload(db, id);
+    return { deletedRuns: runs };
+  });
 }

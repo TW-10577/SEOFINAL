@@ -19,7 +19,7 @@ import {
   vocabCodes,
   vocabulary,
 } from '../src/ontology.ts';
-import { GA4_DIR, clientFiles, config, freshDb, ontology } from './helpers.ts';
+import { GA4_DIR, clientFiles, config, freshDb, ontology, weeksChart } from './helpers.ts';
 
 const apiNames = (vt: string) => vocabulary(ontology(), vt).map((v) => v.apiName).sort();
 
@@ -62,15 +62,15 @@ describe('database matches the ontology vocabularies', () => {
 });
 
 describe('the engine only produces ontology values', () => {
-  test('subject types, statuses and confidence from a real run', () => {
-    const db = freshDb();
-    const cfg = config();
-    importFiles(db, cfg, clientFiles(GA4_DIR), { source: 'GA4' });
-    const runId = runMeasurements(db, cfg);
+  test('subject types, statuses and confidence from a real run', async () => {
+    const db = (await freshDb());
+    const cfg = config((c) => (c.dataPolicy.evaluateSyntheticData = true)); // reaches an anomaly
+    (await importFiles(db, cfg, clientFiles(GA4_DIR), { source: 'GA4' }));
+    const runId = (await runMeasurements(db, cfg));
     const units = new Set(vocabCodes(ontology(), VT.subjectType));
-    for (const r of listAnalysisResults(db, runId)) assert.ok(units.has(SUBJECT_TO_UNIT[r.subjectType as keyof typeof SUBJECT_TO_UNIT]), `analysis subject ${r.subjectType}`);
-    for (const m of listMeasurements(db, cfg, runId)) {
-      const d = getMeasurementDetail(db, cfg, m.id)!;
+    for (const r of (await listAnalysisResults(db, runId))) assert.ok(units.has(SUBJECT_TO_UNIT[r.subjectType as keyof typeof SUBJECT_TO_UNIT]), `analysis subject ${r.subjectType}`);
+    for (const m of (await listMeasurements(db, cfg, runId))) {
+      const d = (await getMeasurementDetail(db, cfg, m.id))!;
       if (!d.anomaly) continue;
       assert.ok(units.has(SUBJECT_TO_UNIT[d.anomaly.subjectType as keyof typeof SUBJECT_TO_UNIT]));
       assert.ok(apiNames(VT.confidence).includes(d.cause!.confidence));
@@ -79,36 +79,38 @@ describe('the engine only produces ontology values', () => {
 });
 
 describe('state changes follow the ontology lifecycles', () => {
-  function run() {
-    const db = freshDb();
-    const cfg = config();
-    importFiles(db, cfg, clientFiles(GA4_DIR), { source: 'GA4' });
-    const runId = runMeasurements(db, cfg);
-    const m = listMeasurements(db, cfg, runId).find((x) => x.status === 'NG')!;
-    return { db, d: getMeasurementDetail(db, cfg, m.id)! };
+  async function run() {
+    const db = (await freshDb());
+    const cfg = config((c) => (c.dataPolicy.evaluateSyntheticData = true)); // client dummy file in test-data mode
+    (await importFiles(db, cfg, clientFiles(GA4_DIR), { source: 'GA4' }));
+    (await importFiles(db, cfg, [weeksChart()], { source: 'GSC' })); // determines the cause → countermeasure proposed
+    const runId = (await runMeasurements(db, cfg));
+    const m = (await listMeasurements(db, cfg, runId)).find((x) => x.status === 'NG')!;
+    return { db, d: (await getMeasurementDetail(db, cfg, m.id))! };
   }
 
-  test('every countermeasure transition in the YAML can be walked to a terminal state', () => {
-    const { db, d } = run();
+  test('every countermeasure transition in the YAML can be walked to a terminal state', async () => {
+    const { db, d } = (await run());
     const id = d.countermeasures[0]!.id;
-    for (const to of ['Approved', 'InProgress', 'Completed', 'VerifiedEffective']) changeState(db, ontology(), 'countermeasure', id, to, 'Tanaka');
-    assert.throws(() => changeState(db, ontology(), 'countermeasure', id, 'VerifiedIneffective', 'Tanaka'), TransitionError);
+    (await changeState(db, ontology(), 'cause', d.cause!.id, 'Confirmed', 'Tanaka')); // guard: approve only a confirmed cause
+    for (const to of ['Approved', 'InProgress', 'Completed', 'VerifiedEffective']) (await changeState(db, ontology(), 'countermeasure', id, to, 'Tanaka'));
+    await assert.rejects(() => changeState(db, ontology(), 'countermeasure', id, 'VerifiedIneffective', 'Tanaka'), TransitionError);
   });
 
-  test('a move the ontology does not declare is refused (Triaged → Dismissed)', () => {
-    const { db, d } = run();
-    changeState(db, ontology(), 'anomaly', d.anomaly!.id, 'Triaged', 'Tanaka');
-    assert.throws(() => changeState(db, ontology(), 'anomaly', d.anomaly!.id, 'Dismissed', 'Tanaka'), /not a transition in the ontology lifecycle/);
+  test('a move the ontology does not declare is refused (Triaged → Dismissed)', async () => {
+    const { db, d } = (await run());
+    (await changeState(db, ontology(), 'anomaly', d.anomaly!.id, 'Triaged', 'Tanaka'));
+    await assert.rejects(() => changeState(db, ontology(), 'anomaly', d.anomaly!.id, 'Dismissed', 'Tanaka'), /not a transition in the ontology lifecycle/);
   });
 
-  test('cause: NeedsMoreEvidence → Confirmed is declared and allowed', () => {
-    const { db, d } = run();
-    changeState(db, ontology(), 'cause', d.cause!.id, 'NeedsMoreEvidence', 'Sato');
-    changeState(db, ontology(), 'cause', d.cause!.id, 'Confirmed', 'Sato');
+  test('cause: NeedsMoreEvidence → Confirmed is declared and allowed', async () => {
+    const { db, d } = (await run());
+    (await changeState(db, ontology(), 'cause', d.cause!.id, 'NeedsMoreEvidence', 'Sato'));
+    (await changeState(db, ontology(), 'cause', d.cause!.id, 'Confirmed', 'Sato'));
   });
 });
 
-describe('judgment conditions (config/rules.yaml) satisfy the JudgmentCondition contract', () => {
+describe('judgment conditions (rules.yaml) satisfy the JudgmentCondition contract', () => {
   const contract = (c = config()) => c.rules.map((r) => ({ id: r.id, thresholdUnit: r.thresholdUnit, direction: r.direction, conditionType: r.conditionType }));
   test('the configured rules are valid', () => assert.deepEqual(checkJudgmentConditions(ontology(), contract()), []));
   test('an unknown unit or direction is reported', () => {
@@ -172,7 +174,7 @@ describe('a broken ontology stops the system', () => {
 
 describe('API', () => {
   test('GET /api/ontology in Japanese', async () => {
-    const app = createApp(freshDb(), config(), ontology());
+    const app = createApp((await freshDb()), config(), ontology());
     const o = (await (await app.request('/api/ontology', { headers: { 'x-lang': 'ja' } })).json()) as any;
     assert.equal(o.packageId, 'logos.seo.package.seo');
     assert.equal(o.counts.ObjectType, 11);

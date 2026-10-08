@@ -6,3 +6,6 @@ database/*.db
 database/*.db-journal
 .vite/
 .ontology-build/
+
+# Local environment (database credentials)
+.env

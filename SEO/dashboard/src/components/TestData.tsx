@@ -8,13 +8,9 @@ import type { SourcePeriods } from './PeriodPicker.tsx';
 const KEY = 'logos-seo-include-test-data';
 const EVENT = 'logos-seo-test-data';
 
-/** On by default: uploaded data flows through Data and Measurements; only an explicit "off" leaves test data out. */
+// The "Include test data" switch is no longer shown, so test data is always included (results stay labelled TEST DATA).
 function read(): boolean {
-  try {
-    return localStorage.getItem(KEY) !== '0';
-  } catch {
-    return true;
-  }
+  return true;
 }
 
 export function useTestData(): [boolean, (on: boolean) => void] {

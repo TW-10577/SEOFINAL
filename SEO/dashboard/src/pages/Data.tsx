@@ -1,13 +1,16 @@
-import type { ComparisonRow, DataFilters, ImportedRow, Period, Series, Source, TopRow, Upload } from '@seo/shared';
+import type { ComparisonRow, DataFilters, Ga4Overview, ImportedRow, Period, Series, Source, TopRow, Upload } from '@seo/shared';
+import { WowCharts } from '../components/ReportSections.tsx';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { query } from '../api.ts';
 import { BarChart, ChartCard, LineChart, SERIES_COLORS, SeriesTable, type ChartSeries } from '../components/ChartCard.tsx';
-import { DataTable, Pager } from '../components/DataTable.tsx';
+import { DataTable, ShowMore } from '../components/DataTable.tsx';
 import { PeriodPicker, type SourcePeriods } from '../components/PeriodPicker.tsx';
-import { TestDataNotice, useTestData } from '../components/TestData.tsx';
+import { useTestData } from '../components/TestData.tsx';
 import { KPICard } from '../components/KPICard.tsx';
 import { Ga4Dashboard } from '../components/Ga4Dashboard.tsx';
 import { EmptyState, ErrorState, LoadingState } from '../components/States.tsx';
+import { Icon } from '../components/Icon.tsx';
+import { SectionTitle } from '../components/Header.tsx';
 import { useApi } from '../components/useApi.ts';
 import { compact, metricLabel, metricValue, num, pct, period, signed } from '../format.ts';
 import { t } from '../i18n.ts';
@@ -26,7 +29,6 @@ interface TopResult {
   rows: TopRow[];
 }
 
-const LIMIT = 100;
 
 const TAB_DIM: Record<string, Dim> = { 'gsc-page': 'page', 'gsc-query': 'query', 'gsc-device': 'device', 'gsc-country': 'country', 'gsc-appearance': 'appearance' };
 
@@ -36,11 +38,18 @@ function weekOf(end: string) {
   return { current: { start: day(end, -6), end }, previous: { start: day(end, -13), end: day(end, -7) } };
 }
 
+/** The one source every imported file of the active context was detected as (upload metadata, never the file name); null for an empty or mixed context. */
+function sharedSource(uploads: Upload[] | null, ids: number[]): Source | null {
+  const sources = new Set((uploads ?? []).filter((u) => ids.includes(u.id) && u.importStatus === 'imported').map((u) => u.source));
+  const [only] = sources;
+  return sources.size === 1 && only ? only : null;
+}
+
 /**
  * Data of the active import context (the uploaded / selected files). The GA4 period comes from those files' own
  * data; changing it updates the context, so Measurements and Report follow. Without a context: all data, newest week.
  */
-export function DataPage({ ctx, onCtx, onContinue, onShowAll }: { ctx: ImportContext; onCtx: (patch: Partial<ImportContext>) => void; onContinue: () => void; onShowAll: () => void }) {
+export function DataPage({ ctx, onCtx, onContinue, onShowAll, onGscReport }: { ctx: ImportContext; onCtx: (patch: Partial<ImportContext>) => void; onContinue: () => void; onShowAll: () => void; onGscReport: () => void }) {
   const uploadIds = scopeParam(ctx);
   const uploadId = ctx.uploads.length === 1 ? ctx.uploads[0] : undefined;
   const filters = useApi<DataFilters>(`/data/filters${query({ uploadIds })}`);
@@ -66,21 +75,20 @@ export function DataPage({ ctx, onCtx, onContinue, onShowAll }: { ctx: ImportCon
   }, [includeTest]);
   const [gscEnd, setGscEnd] = useState<string | undefined>();
   const [source, setSource] = useState<'' | Source>('');
-  const [segment, setSegment] = useState('');
   const [page, setPage] = useState('');
   const [q, setQ] = useState('');
-  const [metric, setMetric] = useState('');
 
   const summary = useApi<Summary>(`/data/summary${query({ ga4End, gscEnd, includeTestData: testParam, uploadIds })}`);
+  // Week-on-week charts: the selected GA4 period (current week + the 7 days before), same files and test-data setting.
+  const overview = useApi<Ga4Overview>(`/data/ga4-overview${query({ includeTestData: testParam, uploadIds })}`);
   const f = filters.data;
   const fu = uploadId ? focus.data : null;
-  // Combined view: Search Console files without dates are not part of the week-on-week comparison.
+  // The Source filter follows the active dataset: the detected source of the one file, or of all files when they share a source.
   const allUploads = useApi<Upload[]>('/uploads');
-  const ctxUploads = (allUploads.data ?? []).filter((u) => ctx.uploads.includes(u.id));
-  const undatedGsc = (uploadId ? [] : ctx.uploads.length ? ctxUploads : allUploads.data ?? []).filter((u) => u.source === 'GSC' && u.importStatus === 'imported' && !(u.structure ?? '').includes('gsc-date') && u.structure !== 'gsc-filter');
+  const ctxSource = fu?.source ?? sharedSource(allUploads.data, ctx.uploads);
   useEffect(() => {
-    if (fu?.source) setSource(fu.source);
-  }, [fu?.source]);
+    if (ctxSource) setSource(ctxSource);
+  }, [ctxSource]);
   // A period-total file (e.g. Search Console page / query tabs) has no dates: no week-on-week view for it.
   const undated = !!fu && !!firstRow.data && !firstRow.data.rows[0]?.dataDate;
   const tabDims = fu ? (fu.structure ?? '').split(', ').map((s) => TAB_DIM[s]).filter((d): d is Dim => !!d) : [];
@@ -97,33 +105,43 @@ export function DataPage({ ctx, onCtx, onContinue, onShowAll }: { ctx: ImportCon
     return SERIES_COLORS[(i < 0 ? f.segments.length : i) % SERIES_COLORS.length]!;
   };
   // Filters follow the selected source: each shows only what that source's data has.
-  const ga4Selected = source !== 'GSC';
-  const showSegment = ga4Selected && f.sources.includes('GA4') && f.segments.length > 0;
   const showPage = source ? f.pageSources.includes(source) : f.pageSources.length > 0;
   const showQuery = source ? f.querySources.includes(source) : f.querySources.length > 0;
-  const metricOptions = [...new Set(f.metrics.filter((m) => !source || m.source === source).map((m) => m.metric))];
   function changeSource(next: '' | Source) {
     setSource(next);
-    if (next === 'GSC') setSegment('');
-    if (next && !f!.metrics.some((m) => m.source === next && m.metric === metric)) setMetric('');
     if (next && !f!.pageSources.includes(next)) setPage('');
     if (next && !f!.querySources.includes(next)) setQ('');
   }
   const showGa4 = source !== 'GSC' && !!f.dateRange.GA4;
   const showGsc = source !== 'GA4' && !!f.dateRange.GSC;
+  // The GSC Performance Report button only while the active source is explicitly GSC: hidden for GA4, "All sources" and no dataset.
+  const showGscReport = source === 'GSC' && f.sources.includes('GSC');
+  const showContinue = f.sources.includes('GA4');
 
   return (
     <>
-      <section className="card">
-        <div className="card-body filters">
-          {source !== 'GSC' && <PeriodPicker title={t('GA4 analysis period')} data={periods.data?.GA4} value={ga4End} onChange={setGa4End} />}
+      <section className="card toolbar">
+        {(ctx.uploads.length > 0 || showGscReport || showContinue) && (
+          <div className="toolbar-row">
+            <div className="context">
+              {ctx.uploads.length > 0 && <button className="btn small ghost" onClick={onShowAll}>{t('Show all data')}</button>}
+            </div>
+            {(showGscReport || showContinue) && (
+              <div className="row">
+                {showGscReport && <button className="btn" onClick={onGscReport}><Icon name="report" size={15} />{t('GSC Performance Report')}</button>}
+                {showContinue && <button className="btn primary" onClick={onContinue}>{t('Continue to Measurements')}<Icon name="arrowRight" size={16} /></button>}
+              </div>
+            )}
+          </div>
+        )}
+        <div className="toolbar-row filters">
+          {source !== 'GSC' && <PeriodPicker title={t('GA4 analysis period')} data={periods.data?.GA4} value={ga4End} onChange={setGa4End} hideSingle />}
           {source !== 'GA4' && f.sources.includes('GSC') && (
             <PeriodPicker
               title={t('Search Console analysis period')}
               data={periods.data?.GSC}
               value={gscEnd}
               onChange={setGscEnd}
-              emptyNote={t('No daily data — upload the Search Console daily chart (date tab) for a week-on-week view.')}
             />
           )}
           <label className="field">
@@ -133,15 +151,6 @@ export function DataPage({ ctx, onCtx, onContinue, onShowAll }: { ctx: ImportCon
               {f.sources.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
           </label>
-          {showSegment && (
-          <label className="field">
-            {t('Traffic source (GA4 segment)')}
-            <select value={segment} onChange={(e) => setSegment(e.target.value)}>
-              <option value="">{t('All segments')}</option>
-              {f.segments.map((s) => <option key={s} value={s}>{dataLabel(s)}</option>)}
-            </select>
-          </label>
-          )}
           {showPage && (
             <label className="field">
               {t('Page')}
@@ -154,45 +163,32 @@ export function DataPage({ ctx, onCtx, onContinue, onShowAll }: { ctx: ImportCon
               <input type="search" placeholder={t('Query contains…')} value={q} onChange={(e) => setQ(e.target.value)} />
             </label>
           )}
-          <label className="field">
-            {t('Metric')}
-            <select value={metric} onChange={(e) => setMetric(e.target.value)}>
-              <option value="">{t('All metrics')}</option>
-              {metricOptions.map((m) => <option key={m} value={m}>{metricLabel(m)}</option>)}
-            </select>
-          </label>
-          <span className="spacer" />
-          <button className="btn primary" onClick={onContinue}>{t('Continue to Measurements →')}</button>
         </div>
       </section>
-
-      {ctx.uploads.length > 0 && (
-        <div className="notice info row">
-          <span>
-            {ctx.uploads.length === 1 ? t('Showing the file') : t('Showing the files')}{' '}
-            <strong>{ctxUploads.map((u) => `#${u.id} ${u.fileName}`).join(', ') || ctx.uploads.map((id) => `#${id}`).join(', ')}</strong>
-            {fu && <> · {fu.source === 'GSC' ? 'Google Search Console' : fu.source ?? t('Unknown')} · <span className="mono">{fu.structure}</span></>}
-            {ga4End && periods.data?.GA4.range && <> · {t('analysis period')} <strong>{period(weekOf(ga4End).current)}</strong> {t('vs')} {period(weekOf(ga4End).previous)}</>}
-          </span>
-          <span className="spacer" />
-          <button className="btn small" onClick={onShowAll}>{t('Show all data')}</button>
-        </div>
-      )}
-      {!fu && undatedGsc.length > 0 && source !== 'GA4' && (
-        <div className="notice info">
-          {t('Search Console files without dates: {files}. They are period totals, so they are not in the week-on-week comparison; see the page / query performance below.', { files: undatedGsc.map((u) => u.fileName).join(', ') })}
-        </div>
-      )}
       {undated && (
         <div className="notice warn">
           {t('This file is a period total with no dates, so it has no week-on-week comparison or daily trend. Its ranking and records are shown below.')}
         </div>
       )}
       {uploadId && focus.error != null && <ErrorState error={focus.error} />}
-      {source !== 'GSC' && <TestDataNotice ga4={periods.data?.GA4} />}
       {summary.error != null && <ErrorState error={summary.error} />}
       {/* GA4: dataset overview → KPIs → traffic / CVR → traffic source → purchases + dataset health */}
-      {!undated && showGa4 && <Ga4Dashboard includeTest={includeTest} segment={segment} colorOf={segColor} uploadIds={uploadIds} />}
+      {!undated && showGa4 && (
+        <Ga4Dashboard
+          includeTest={includeTest}
+          colorOf={segColor}
+          uploadIds={uploadIds}
+          comparison={ga4End && summary.data?.periods.GA4 ? { rows: summary.data.rows, ...summary.data.periods.GA4 } : null}
+          beforeHealth={
+            ga4End && periods.data?.GA4.range ? (
+              <WowCharts weeks={weekOf(ga4End)} uploadIds={uploadIds} summary={summary.data ?? null} overview={overview.data ?? null} includeTest={includeTest} />
+            ) : null
+          }
+        />
+      )}
+      {!undated && showGsc && (f.dateRange.GSC || f.pageSources.includes('GSC')) && (
+        <SectionTitle title="Search performance" />
+      )}
       {!undated && showGsc && summary.data && <Kpis summary={summary.data} source="GSC" />}
       {!undated && showGsc && (
         <div className="grid two">
@@ -216,8 +212,8 @@ export function DataPage({ ctx, onCtx, onContinue, onShowAll }: { ctx: ImportCon
           </div>
         )
       )}
-      {!undated && summary.data && <Comparison summary={summary.data} source={source} segment={segment} metric={metric} />}
-      <Records source={source} segment={segment} page={page} q={q} metric={metric} uploadIds={uploadIds} />
+      <SectionTitle title="Data tables" />
+      {!undated && summary.data && <Comparison summary={summary.data} source={source} />}
     </>
   );
 }
@@ -249,6 +245,7 @@ function Kpis({ summary, source }: { summary: Summary; source: '' | Source }) {
             current={row.current}
             previous={row.previous}
             changeRate={row.changeRate}
+            absoluteChange={row.absoluteChange}
             source={`${row.source} · ${p ? period(p.current) : ''}`}
             note={row.note}
           />
@@ -258,56 +255,65 @@ function Kpis({ summary, source }: { summary: Summary; source: '' | Source }) {
   );
 }
 
-function Comparison({ summary, source, segment, metric }: { summary: Summary; source: '' | Source; segment: string; metric: string }) {
+/** Rows shown in the week-on-week comparison before "Show more". */
+const COMPARISON_PREVIEW = 5;
+
+function Comparison({ summary, source }: { summary: Summary; source: '' | Source }) {
   const rows = summary.rows.filter(
-    (r) => (!source || r.source === source) && (!segment || r.source !== 'GA4' || r.subjectKey === segment) && (!metric || r.metric === metric),
+    (r) => (!source || r.source === source),
   );
+  // First rows only until expanded; the full list stays loaded, so toggling never reloads data.
+  const [showAllRows, setShowAllRows] = useState(false);
+  const hidden = Math.max(0, rows.length - COMPARISON_PREVIEW);
   return (
     <section className="card">
       <div className="card-head">
         <div>
-          <h2>{t('Week-on-week comparison')}</h2>
+          <h2>{t('Week-on-week comparison')} <span className="count">{rows.length}</span></h2>
           <div className="hint">
             {(['GA4', 'GSC'] as Source[]).filter((s) => summary.periods[s]).map((s) => t('{source}: current {current} vs previous {previous}', { source: s, current: period(summary.periods[s]!.current), previous: period(summary.periods[s]!.previous) })).join(' · ')}
           </div>
         </div>
-        <span className="hint">{t('Absolute change = current − previous · Change rate = (current − previous) ÷ previous × 100')}</span>
       </div>
       <div className="card-body">
         <DataTable
-          rows={rows}
+          rows={showAllRows ? rows : rows.slice(0, COMPARISON_PREVIEW)}
           rowKey={(r) => `${r.source}|${r.subjectKey}|${r.metric}`}
           empty={t('No dated data for the selected filters. Undated GSC totals (query, page, device…) cannot be compared week on week.')}
           columns={[
             { key: 'src', label: t('Source'), render: (r) => r.source },
-            { key: 'subject', label: t('Subject'), render: (r) => <>{dataLabel(r.subjectKey)} <span className="muted small">({r.subjectType})</span></> },
-            { key: 'metric', label: t('Metric'), render: (r) => metricLabel(r.metric) },
+            { key: 'subject', label: t('Subject'), render: (r) => <>{dataLabel(r.subjectKey)}<span className="cell-sub">{r.subjectType}</span></> },
+            { key: 'metric', label: t('Metric'), render: (r) => <span className="nowrap">{metricLabel(r.metric)}</span> },
             { key: 'prev', label: t('Previous'), num: true, render: (r) => metricValue(r.metric, r.previous) },
-            { key: 'cur', label: t('Current'), num: true, render: (r) => metricValue(r.metric, r.current) },
+            { key: 'cur', label: t('Current'), num: true, render: (r) => <strong>{metricValue(r.metric, r.current)}</strong> },
             { key: 'abs', label: t('Absolute change'), num: true, render: (r) => signed(r.metric, r.absoluteChange) },
-            { key: 'rate', label: t('Change rate'), num: true, render: (r) => pct(r.changeRate) },
-            { key: 'note', label: t('Note'), render: (r) => <span className="small muted">{r.note}</span> },
+            { key: 'rate', label: t('Change rate'), num: true, render: (r) => <span className={r.changeRate == null || r.changeRate === 0 ? '' : r.changeRate > 0 ? 'trend-up' : 'trend-down'}>{pct(r.changeRate)}</span> },
+            { key: 'note', label: t('Note'), className: 'cell-note', render: (r) => r.note || <span className="muted">—</span> },
           ]}
         />
+        {hidden > 0 && (
+          <div className="show-more">
+            <ShowMore hidden={hidden} expanded={showAllRows} onToggle={() => setShowAllRows((v) => !v)} one="Show more (1 row)" many="Show more ({n} rows)" />
+          </div>
+        )}
       </div>
     </section>
   );
 }
 
-function Trend({ title, subtitle, source, metric, segment, colorOf, format, zeroBased, invert, uploadIds }: {
+function Trend({ title, subtitle, source, metric, colorOf, format, zeroBased, invert, uploadIds }: {
   uploadIds?: string;
   title: string;
   subtitle: string;
   source: Source;
   metric: string;
-  segment?: string;
   colorOf: (key: string) => string;
   format?: (v: number) => string;
   zeroBased?: boolean;
   invert?: boolean;
 }) {
   const [includeTest] = useTestData();
-  const res = useApi<Series[]>(`/data/trends${query({ source, metric, segment, includeTestData: includeTest ? 1 : 0, uploadIds })}`);
+  const res = useApi<Series[]>(`/data/trends${query({ source, metric, includeTestData: includeTest ? 1 : 0, uploadIds })}`);
   const series: ChartSeries[] = useMemo(() => (res.data ?? []).map((s) => ({ ...s, color: colorOf(s.key) })), [res.data, colorOf]);
   if (res.data && !res.data.length) return null; // no graph without data
   return (
@@ -352,41 +358,5 @@ function TopPerformance({ dim, title, search, uploadId, uploadIds }: { dim: Dim;
         format={(v) => compact(v)}
       />
     </ChartCard>
-  );
-}
-
-function Records({ source, segment, page, q, metric, uploadIds }: { source: string; segment: string; page: string; q: string; metric: string; uploadIds?: string }) {
-  const [offset, setOffset] = useState(0);
-  useEffect(() => setOffset(0), [source, segment, page, q, metric, uploadIds]);
-  const res = useApi<{ total: number; rows: ImportedRow[] }>(`/data${query({ source, segment, page, query: q, metric, uploadIds, limit: LIMIT, offset })}`);
-  return (
-    <section className="card">
-      <div className="card-head">
-        <div>
-          <h2>{t('Imported Data')} {res.data && <span className="count">{t('{n} rows', { n: res.data.total.toLocaleString() })}</span>}</h2>
-          <div className="hint">{t('Valid normalized rows from the database (one value per date × segment × metric), filtered by the controls at the top.')}</div>
-        </div>
-      </div>
-      <div className="card-body">
-        {res.error != null && <ErrorState error={res.error} />}
-        {res.data && (
-          <>
-            <DataTable
-              rows={res.data.rows}
-              rowKey={(r) => r.id}
-              columns={[
-                { key: 'up', label: t('Upload'), num: true, render: (r) => `#${r.uploadId}` },
-                { key: 'src', label: t('Source'), render: (r) => r.source },
-                { key: 'date', label: t('Date / period'), render: (r) => r.dataDate ?? <span className="muted">{period(r.periodStart ? { start: r.periodStart, end: r.periodEnd! } : null)}</span> },
-                { key: 'subject', label: t('Subject'), render: (r) => <span style={{ wordBreak: 'break-all' }}>{dataLabel(r.segment ?? r.query ?? r.pageUrl ?? r.device ?? r.country ?? r.searchAppearance ?? 'site')}</span> },
-                { key: 'm', label: t('Metric'), render: (r) => metricLabel(r.metricName) },
-                { key: 'v', label: t('Value'), num: true, render: (r) => metricValue(r.metricName, r.metricValue) },
-              ]}
-            />
-            <Pager total={res.data.total} limit={LIMIT} offset={offset} onChange={setOffset} />
-          </>
-        )}
-      </div>
-    </section>
   );
 }

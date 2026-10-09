@@ -64,7 +64,7 @@ export function FileUpload({ onUploaded }: { onUploaded: (res: UploadResponse) =
       <div className="card-head">
         <h2><Icon name="upload" size={18} /> {t('Upload')}</h2>
       </div>
-      <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <div
           className={`dropzone${over ? ' over' : ''}`}
           role="button"
@@ -74,14 +74,19 @@ export function FileUpload({ onUploaded }: { onUploaded: (res: UploadResponse) =
           onClick={() => !busy && input.current?.click()}
           onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), !busy && input.current?.click())}
           onDragOver={(e) => (e.preventDefault(), setOver(true))}
-          onDragLeave={() => setOver(false)}
+          onDragLeave={(e) => !e.currentTarget.contains(e.relatedTarget as Node) && setOver(false)}
           onDrop={(e) => (e.preventDefault(), setOver(false), importFiles(e.dataTransfer.files))}
         >
           <span className="dropzone-icon"><Icon name={busy ? 'loader' : 'upload'} size={20} className={busy ? 'spin' : undefined} /></span>
           <div className="dropzone-title">
-            {busy ? t('Importing…') : t('Drop files here')}
+            {busy ? t('Importing…') : over ? t('Release to import') : t('Drop files here')}
           </div>
-          <div className="dropzone-hint">{t('CSV or Excel exports from GA4 and Search Console — the source is detected from the contents')}</div>
+          {!busy && (
+            <span className="btn primary small dropzone-btn" aria-hidden>
+              <Icon name="file" size={14} />
+              {t('Choose files')}
+            </span>
+          )}
           <input ref={input} type="file" multiple hidden onChange={(e) => (importFiles(e.target.files), (e.target.value = ''))} />
         </div>
         {error != null && <ErrorState error={error} />}

@@ -71,13 +71,13 @@ export function App() {
         <div className="workspace">
           {route.app === 'seo' ? (
             <>
-              <Header title={t(PAGES[route.page].title)} subtitle={t(PAGES[route.page].subtitle)} nav={<PageTabs active={route.page} onNavigate={(p) => go(p)} />} />
+              <Header title={t(PAGES[route.page].title)} nav={<PageTabs active={route.page} onNavigate={(p) => go(p)} />} />
               <main className="content">
                 {route.page === 'import' && <DataImportPage onContinue={(uploads) => go('data', { uploads })} />}
                 {route.page === 'data' && (
-                  <DataPage key={ctx.uploads.join(',') || 'all'} ctx={ctx} onCtx={setCtx} onShowAll={() => go('data', EMPTY)} onContinue={() => go('measurements')} />
+                  <DataPage key={ctx.uploads.join(',') || 'all'} ctx={ctx} onCtx={setCtx} onShowAll={() => go('data', EMPTY)} onContinue={() => go('measurements')} onGscReport={() => go('report', { ...ctx, report: 'gsc' })} />
                 )}
-                {route.page === 'measurements' && <MeasurementsPage ctx={ctx} onCtx={setCtx} onContinue={(run) => go('report', { ...ctx, run })} />}
+                {route.page === 'measurements' && <MeasurementsPage ctx={ctx} onCtx={setCtx} onContinue={(run) => go('report', { ...ctx, run, report: undefined })} />}
                 {route.page === 'report' && <ReportPage ctx={ctx} onCtx={setCtx} onBack={() => go('measurements')} />}
               </main>
             </>

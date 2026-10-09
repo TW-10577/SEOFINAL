@@ -1,6 +1,7 @@
 import type { Period } from '@seo/shared';
 import { t } from '../i18n.ts';
 import { period } from '../format.ts';
+import { Icon } from './Icon.tsx';
 
 export interface WeekPeriod {
   current: Period;
@@ -20,7 +21,15 @@ const label = (p: WeekPeriod) => t('{current} vs {previous}', { current: period(
  * The analysis period detected from the uploaded data. A selector appears only when the data holds
  * more than one valid week-on-week period; otherwise the detected period is just shown.
  */
-export function PeriodPicker({ title, data, value, onChange, emptyNote }: { title: string; data: SourcePeriods | undefined; value: string | undefined; onChange: (end: string) => void; emptyNote?: string }) {
+export function PeriodPicker({ title, data, value, onChange, emptyNote, hideSingle }: {
+  title: string;
+  data: SourcePeriods | undefined;
+  value: string | undefined;
+  onChange: (end: string) => void;
+  emptyNote?: string;
+  /** Show nothing when only one period exists (the page already shows the detected period). */
+  hideSingle?: boolean;
+}) {
   if (!data?.range)
     return emptyNote ? (
       <label className="field">
@@ -29,6 +38,7 @@ export function PeriodPicker({ title, data, value, onChange, emptyNote }: { titl
       </label>
     ) : null;
   const chosen = data.periods.find((p) => p.current.end === value) ?? data.periods[0];
+  if (hideSingle && data.periods.length === 1) return null;
   return (
     <label className="field">
       {title}
@@ -42,7 +52,11 @@ export function PeriodPicker({ title, data, value, onChange, emptyNote }: { titl
           ))}
         </select>
       ) : chosen ? (
-        <span className="period-value">{label(chosen)}</span>
+        <span className="period-value" title={t('Detected from the uploaded data')}>
+          <Icon name="calendar" size={14} />
+          {label(chosen)}
+          <span className="badge info">{t('auto-detected')}</span>
+        </span>
       ) : (
         <span className="period-value caveat">{t('No complete week-on-week period (data: {range})', { range: period(data.range) })}</span>
       )}

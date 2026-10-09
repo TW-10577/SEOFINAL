@@ -353,10 +353,22 @@ async function docxGrids(buf: Buffer): Promise<Grid[]> {
 
 // ---------- ZIP: every entry is processed on its own ----------
 
+/** The ZIP reader returns UTF-8 entry names (e.g. クエリ.csv) as Latin-1 characters; decode them back when they are valid UTF-8. */
+function entryName(raw: string): string {
+  if (!/[\u0080-ÿ]/.test(raw) || /[^\u0000-ÿ]/.test(raw)) return raw;
+  const bytes = Buffer.from(raw, 'latin1');
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    return raw; // not UTF-8 (e.g. a Shift_JIS name): keep as read
+  }
+}
+
 function zipEntries(buf: Buffer): { name: string; data: Buffer }[] {
   const cfb = XLSX.CFB.read(buf, { type: 'buffer' });
-  return cfb.FileIndex.map((f: any, i: number) => ({ f, name: cfb.FullPaths[i].replace(/^Root Entry\//, '') }))
-    .filter(({ f, name }: any) => f.type === 2 && f.content?.length && !/(^|\/)(__MACOSX|\.)/.test(name))
+  return cfb.FileIndex.map((f: any, i: number) => ({ f, name: entryName(cfb.FullPaths[i].replace(/^Root Entry\//, '')) }))
+    // \u0001Sh33tJ5 is a placeholder entry the reader adds itself, not part of the archive.
+    .filter(({ f, name }: any) => f.type === 2 && f.content?.length && !/(^|\/)(__MACOSX|\.|\u0001)/.test(name))
     .map(({ f, name }: any) => ({ name, data: Buffer.from(f.content) }));
 }
 

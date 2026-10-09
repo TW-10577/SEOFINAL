@@ -10,7 +10,6 @@ export function CountermeasurePanel({ cause, countermeasures, reviewer, onChange
     <section className="card">
       <div className="card-head">
         <h2>{t('Countermeasure')}</h2>
-        <span className="hint">{t('Recommended from the possible cause. Only the SEO team approves, rejects or carries it out.')}</span>
       </div>
       <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         {!countermeasures.length &&

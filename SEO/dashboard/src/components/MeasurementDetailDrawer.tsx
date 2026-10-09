@@ -45,7 +45,7 @@ export function MeasurementDetailDrawer({ id, onClose, onChanged }: { id: number
           {d && (
             <>
               <section className="card">
-                <div className="card-head"><h2>{t('Measurement')}</h2><span className="hint">{t('Calculated automatically from the client rule — not selectable.')}</span></div>
+                <div className="card-head"><h2>{t('Measurement')}</h2></div>
                 <div className="card-body">
                   <dl className="kv">
                     <dt>{t('Measurement name')}</dt><dd>{d.measurement.name}</dd>
@@ -74,7 +74,6 @@ export function MeasurementDetailDrawer({ id, onClose, onChanged }: { id: number
                     <dt>{t('Status')}</dt>
                     <dd>{d.measurement.status === 'NG' ? <strong>{t('Anomaly Detected')}</strong> : d.measurement.status === 'OK' ? t('No Anomaly') : t('No Anomaly (not evaluated)')}</dd>
                   </dl>
-                  {d.measurement.status === 'NG' && <div className="small muted" style={{ marginTop: 8 }}>{t('NG means a significant business-rule change. It does not mean the uploaded file is invalid.')}</div>}
                 </div>
               </section>
               {/* GA4 evidence → GSC supporting evidence → cause → countermeasure → anomaly decisions */}

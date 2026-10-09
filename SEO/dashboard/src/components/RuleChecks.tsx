@@ -5,6 +5,7 @@ import { dataLabel, t } from '../i18n.ts';
 import { DataTable } from './DataTable.tsx';
 import { ErrorState, LoadingState } from './States.tsx';
 import { StatusBadge } from './StatusBadge.tsx';
+import { Icon, type IconName } from './Icon.tsx';
 import { useApi } from './useApi.ts';
 
 type ResultFilter = '' | 'NG' | 'OK' | 'NOT_EVALUABLE';
@@ -42,57 +43,60 @@ function ResultBadge({ status }: { status: string }) {
  * Measurements as rule checks (one row per rule and week). A row opens in place: the rule, the result,
  * the figures it was based on and — for NG — why (likely cause) and the suggested next step.
  */
-export function RuleChecks({ run, rows, dataUsed, onReview }: { run: MeasurementRun; rows: Measurement[]; dataUsed: DataUsed[]; onReview: (id: number) => void }) {
+export function RuleChecks({ run, rows, onReview }: { run: MeasurementRun; rows: Measurement[]; dataUsed: DataUsed[]; onReview: (id: number) => void }) {
   const [rule, setRule] = useState('');
   const [result, setResult] = useState<ResultFilter>('');
   const [open, setOpen] = useState<Set<number>>(() => new Set(rows.filter((m) => m.status === 'NG').map((m) => m.id)));
   const shown = rows.filter((m) => (!rule || m.ruleCode === rule) && (!result || m.status === result));
   const count = (s: string) => rows.filter((m) => m.status === s).length;
-  const judged = dataUsed.filter((u) => u.source !== 'GSC');
-  const evidence = dataUsed.filter((u) => u.source === 'GSC');
   const toggle = (id: number) => setOpen((o) => {
     const n = new Set(o);
     n.has(id) ? n.delete(id) : n.add(id);
     return n;
   });
 
+  const cards: { key: ResultFilter; cls: string; icon: IconName; label: string; n: number; sub: string }[] = [
+    { key: '', cls: '', icon: 'gauge', label: t('Rule checks'), n: rows.length, sub: t('Week {current} vs {previous}', { current: span(run.current), previous: span(run.previous) }) },
+    { key: 'NG', cls: 'ng', icon: 'x', label: 'NG', n: count('NG'), sub: t('Beyond the limit — anomaly created') },
+    { key: 'OK', cls: 'ok', icon: 'check', label: 'OK', n: count('OK'), sub: t('Within the limit') },
+    { key: 'NOT_EVALUABLE', cls: 'ne', icon: 'minus', label: t('NOT EVALUABLE'), n: count('NOT_EVALUABLE'), sub: t('Rule could not be applied (GA4 data missing)') },
+  ];
+
   return (
     <section className="card">
-      <div className="card-head" style={{ flexWrap: 'wrap', gap: 10 }}>
-        <h2>{t('Rule checks')}</h2>
-        <select value={rule} onChange={(e) => setRule(e.target.value)}>
-          <option value="">{t('All rules')}</option>
-          {[...new Set(rows.map((m) => m.ruleCode))].map((c) => <option key={c} value={c}>{c}</option>)}
-        </select>
-        <select value={result} onChange={(e) => setResult(e.target.value as ResultFilter)}>
-          <option value="">{t('All results')}</option>
-          <option value="NG">NG</option>
-          <option value="OK">OK</option>
-          <option value="NOT_EVALUABLE">{t('Not checked')}</option>
-        </select>
-        <span className="secondary">
-          {t('{shown} of {total} · {ng} NG · {ok} OK · {nc} not checked', { shown: shown.length, total: rows.length, ng: count('NG'), ok: count('OK'), nc: count('NOT_EVALUABLE') })}
-        </span>
+      <div className="card-head">
+        <div>
+          <h2>{t('Rule checks')} <span className="count">{t('{shown} of {total}', { shown: shown.length, total: rows.length })}</span></h2>
+        </div>
+        <div className="card-actions">
+          <select value={rule} onChange={(e) => setRule(e.target.value)} aria-label={t('Rule')}>
+            <option value="">{t('All rules')}</option>
+            {[...new Set(rows.map((m) => m.ruleCode))].map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <select value={result} onChange={(e) => setResult(e.target.value as ResultFilter)} aria-label={t('Result')}>
+            <option value="">{t('All results')}</option>
+            <option value="NG">NG</option>
+            <option value="OK">OK</option>
+            <option value="NOT_EVALUABLE">{t('Not checked')}</option>
+          </select>
+        </div>
       </div>
-      <div className="card-body">
-        {judged.length > 0 && (
-          <div style={{ marginBottom: 6 }}>
-            {t('Results for')} <strong>{judged.map((u) => u.fileName).join(', ')}</strong>
-            {evidence.length > 0 && <span className="secondary"> · {t('Search Console evidence')}: {evidence.map((u) => u.fileName).join(', ')}</span>}.
-          </div>
-        )}
-        <div className="secondary" style={{ marginBottom: 12 }}>
-          {t('The current week is compared with the week before under rules {rules}, and the system decides:', { rules: [...new Set(rows.map((m) => m.ruleCode))].join(' and ') })}{' '}
-          <StatusBadge status="NG" /> {t('a change went beyond the rule’s limit (an SEO anomaly is created),')}{' '}
-          <StatusBadge status="OK" /> {t('the change stayed within the limit,')}{' '}
-          <span className="badge">{t('Not checked')}</span> {t('the rule could not be applied (GA4 data missing).')}{' '}
-          {t('Click a row for the basis.')}
+      <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div className="status-cards" role="group" aria-label={t('Filter by result')}>
+          {cards.map((c) => (
+            <button key={c.key || 'all'} className={`status-card ${c.cls}`} aria-pressed={result === c.key} onClick={() => setResult(c.key)}>
+              <span className="sc-icon"><Icon name={c.icon} size={13} /></span>
+              <span className="sc-label">{c.label}</span>
+              <span className="sc-count">{c.n}</span>
+              <span className="sc-sub">{c.sub}</span>
+            </button>
+          ))}
         </div>
         <div className="table-wrap" style={{ maxHeight: 'none' }}>
-          <table className="data">
+          <table className="data rule-table">
             <thead>
               <tr>
-                <th />
+                <th style={{ width: 40 }}><span className="visually-hidden">{t('Detail')}</span></th>
                 <th>{t('Week')}</th>
                 <th>{t('Rule')}</th>
                 <th>{t('What is checked')}</th>
@@ -106,14 +110,14 @@ export function RuleChecks({ run, rows, dataUsed, onReview }: { run: Measurement
             <tbody>
               {shown.map((m) => (
                 <Fragment key={m.id}>
-                  <tr className="clickable" onClick={() => toggle(m.id)}>
-                    <td className="muted">{open.has(m.id) ? '▾' : '▸'}</td>
-                    <td className="nowrap">
+                  <tr className={`clickable${open.has(m.id) ? ' selected' : ''}`} onClick={() => toggle(m.id)} aria-expanded={open.has(m.id)}>
+                    <td><span className={`expand-toggle${open.has(m.id) ? ' open' : ''}`}><Icon name="chevronRight" size={16} /></span></td>
+                    <td className="nowrap tabular">
                       {span(run.current)}
-                      <div className="small muted">vs {span(run.previous)}</div>
+                      <span className="cell-sub">vs {span(run.previous)}</span>
                     </td>
                     <td><span className="badge info">{m.ruleCode}</span></td>
-                    <td>{m.name.replace(/^[①②③④⑤]\s*/, '')}</td>
+                    <td><strong>{m.name.replace(/^[①②③④⑤]\s*/, '')}</strong></td>
                     <td className="num">{metricValue(m.metric, m.previousValue)} → {metricValue(m.metric, m.currentValue)}</td>
                     <td className="num"><strong>{change(m.metric, m.changeRate, m.absoluteChange)}</strong></td>
                     <td className="num">{limit(m)}</td>
@@ -121,9 +125,8 @@ export function RuleChecks({ run, rows, dataUsed, onReview }: { run: Measurement
                     <td><ResultBadge status={m.status} /></td>
                   </tr>
                   {open.has(m.id) && (
-                    <tr>
-                      <td />
-                      <td colSpan={8} style={{ background: 'var(--surface-2)' }}>
+                    <tr className="detail-row">
+                      <td colSpan={9}>
                         <Expanded m={m} run={run} onReview={onReview} />
                       </td>
                     </tr>
@@ -132,8 +135,8 @@ export function RuleChecks({ run, rows, dataUsed, onReview }: { run: Measurement
               ))}
             </tbody>
           </table>
+          {!shown.length && <div className="state">{t('No rule checks match the filters.')}</div>}
         </div>
-        {!shown.length && <div className="state">{t('No rule checks match the filters.')}</div>}
       </div>
     </section>
   );
@@ -142,22 +145,22 @@ export function RuleChecks({ run, rows, dataUsed, onReview }: { run: Measurement
 function Expanded({ m, run, onReview }: { m: Measurement; run: MeasurementRun; onReview: (id: number) => void }) {
   const [sources, setSources] = useState(false);
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '6px 4px 10px' }}>
-      <div className="grid two">
-        <div>
-          <div className="small secondary" style={{ fontWeight: 600, textTransform: 'uppercase' }}>{t('Rule')}</div>
+    <div className="detail-panel">
+      <div className="detail-grid">
+        <div className="detail-block">
+          <span className="detail-label">{t('Rule')}</span>
           <div>{m.criteria}</div>
-          <div className="small muted">{m.ruleId} · {t('Analysis unit')}: {m.analysisUnit}</div>
+          <div className="small muted"><span className="mono">{m.ruleId}</span> · {t('Analysis unit')}: {m.analysisUnit}</div>
         </div>
-        <div>
-          <div className="small secondary" style={{ fontWeight: 600, textTransform: 'uppercase' }}>{t('Result')}</div>
+        <div className="detail-block">
+          <span className="detail-label">{t('Result')}</span>
           <div><ResultBadge status={m.status} /> {m.reason}</div>
           {m.caveats.length > 0 && <div className="small caveat">⚠ {m.caveats.join(' · ')}</div>}
         </div>
       </div>
 
-      <div>
-        <div style={{ fontWeight: 600, marginBottom: 4 }}>{t('Basis')}</div>
+      <div className="detail-block">
+        <span className="detail-label">{t('Basis')}</span>
         <DataTable
           rows={m.basis}
           rowKey={(b) => b.label}
@@ -172,34 +175,41 @@ function Expanded({ m, run, onReview }: { m: Measurement; run: MeasurementRun; o
       </div>
 
       {m.why && (
-        <div style={{ borderLeft: '3px solid var(--critical)', background: 'var(--surface)', padding: '10px 14px', borderRadius: 4 }}>
-          <div style={{ fontWeight: 600, marginBottom: 4 }}>{m.why.title}</div>
-          <div>
-            <strong>{t('Likely cause')}:</strong> {m.why.likelyCause}
-            {m.why.confidence && <span className="small secondary"> ({t('confidence')}: {t(m.why.confidence)} — {t('hypothesis, not confirmed')})</span>}
-          </div>
-          <div style={{ marginTop: 4 }}>
-            <strong>{t('Suggested next step')}:</strong> {m.why.nextStep}
-          </div>
-          {m.why.feedback && (
-            <div style={{ marginTop: 4 }}>
-              <strong>{m.why.team ? t('Feedback to {team}', { team: m.why.team }) : t('Feedback')}:</strong> {m.why.feedback}
+        <div className="detail-block">
+          <span className="detail-label">{m.why.title}</span>
+          <div className="detail-why">
+            <div className="cause">
+              <span className="detail-label">{t('Cause hypothesis')}</span>
+              <div>{m.why.likelyCause}</div>
+              {m.why.confidence && <div className="small secondary">{t('confidence')}: {t(m.why.confidence)} — {t('hypothesis, not confirmed')}</div>}
             </div>
-          )}
-          <div className="row" style={{ marginTop: 8 }}>
-            <button className="btn link" onClick={() => setSources(!sources)}>{sources ? '▾' : '▸'} {t('Source cells in the uploaded file')}</button>
-            <span className="spacer" />
-            <button className="btn small" onClick={() => onReview(m.id)}>{t('GSC evidence & SEO team review →')}</button>
+            <div className="action">
+              <span className="detail-label">{t('Proposed countermeasure')}</span>
+              <div>{m.why.nextStep}</div>
+            </div>
+            {m.why.feedback && (
+              <div className="feedback">
+                <span className="detail-label">{m.why.team ? t('Feedback to {team}', { team: m.why.team }) : t('Feedback')}</span>
+                <div>{m.why.feedback}</div>
+              </div>
+            )}
           </div>
-          {sources && <SourceCells id={m.id} />}
         </div>
       )}
-      {!m.why && (
-        <div className="row">
-          <button className="btn link" onClick={() => setSources(!sources)}>{sources ? '▾' : '▸'} {t('Source cells in the uploaded file')}</button>
-        </div>
-      )}
-      {!m.why && sources && <SourceCells id={m.id} />}
+
+      <div className="row">
+        <button className="btn link small" onClick={() => setSources(!sources)} aria-expanded={sources}>
+          <Icon name={sources ? 'chevronDown' : 'chevronRight'} size={14} />
+          {t('Source cells in the uploaded file')}
+        </button>
+        <span className="spacer" />
+        <button className="btn small" onClick={() => onReview(m.id)}>
+          <Icon name="search" size={14} />
+          {m.why ? t('Evidence, GSC supporting evidence & SEO team review') : t('Evidence & detail')}
+          <Icon name="arrowRight" size={14} />
+        </button>
+      </div>
+      {sources && <SourceCells id={m.id} />}
     </div>
   );
 }

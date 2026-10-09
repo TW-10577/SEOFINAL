@@ -18,9 +18,6 @@ export function CauseHypothesisPanel({ cause, reviewer, onChanged }: { cause: Ca
     <section className="card">
       <div className="card-head">
         <h2>{t('Cause Hypothesis')}</h2>
-        <span className="hint">
-          {confirmed ? t('Confirmed by the SEO team.') : t('A possible cause from the available evidence — not a confirmed cause until the SEO team confirms it.')}
-        </span>
       </div>
       <div className="card-body">
         <div className="small secondary">{confirmed ? t('Confirmed cause') : t('Possible cause (hypothesis)')}</div>

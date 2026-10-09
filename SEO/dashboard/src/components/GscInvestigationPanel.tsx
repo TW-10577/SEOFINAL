@@ -28,7 +28,6 @@ export function GscInvestigationPanel({ inv }: { inv: GscInvestigation }) {
     <section className="card">
       <div className="card-head">
         <h2>{inv.ruleId} · {inv.name}</h2>
-        <span className="hint">{t('Investigation only — no OK / NG of its own. Compares the GSC exports of the two measured weeks.')}</span>
       </div>
       <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <dl className="kv">

@@ -14,6 +14,8 @@ export interface ImportContext {
   end?: string;
   /** The measurement run of this context, once known. */
   run?: number;
+  /** Report page source: GA4 report (default) or the standalone GSC Performance Report. */
+  report?: 'gsc';
 }
 
 export function parseContext(params: URLSearchParams): ImportContext {
@@ -21,7 +23,7 @@ export function parseContext(params: URLSearchParams): ImportContext {
   const raw = params.get('uploads') ?? params.get('upload') ?? '';
   const uploads = [...new Set(raw.split(',').map(Number).filter((n) => Number.isInteger(n) && n > 0))].sort((a, b) => a - b);
   const end = params.get('end') ?? undefined;
-  return { uploads, end: end && /^\d{4}-\d{2}-\d{2}$/.test(end) ? end : undefined, run: Number(params.get('run')) || undefined };
+  return { uploads, end: end && /^\d{4}-\d{2}-\d{2}$/.test(end) ? end : undefined, run: Number(params.get('run')) || undefined, report: params.get('report') === 'gsc' ? 'gsc' : undefined };
 }
 
 export function contextQuery(c: ImportContext): string {
@@ -29,6 +31,7 @@ export function contextQuery(c: ImportContext): string {
   if (c.uploads.length) p.set('uploads', c.uploads.join(','));
   if (c.end) p.set('end', c.end);
   if (c.run) p.set('run', String(c.run));
+  if (c.report) p.set('report', c.report);
   const s = p.toString();
   return s ? `?${s}` : '';
 }

@@ -106,6 +106,34 @@ export async function rawRecords(db: DB, uploadId: number, limit = 200, offset =
   return { total, rows };
 }
 
+// ---------- Export of one GSC file ----------
+
+/**
+ * Every valid source record of one Search Console table (e.g. gsc-page) of an upload, with all of its columns in
+ * file order — the table of the dashboard's formatted Excel report. Plain numbers become numbers; everything else
+ * (URLs, "5.75%") stays as exported. `search` keeps only rows whose dimension (first column: page, query, …)
+ * contains it, case-insensitive — the same match as the Data page filter.
+ */
+export async function exportGscTable(db: DB, uploadId: number, table: string, search = '') {
+  const u = await db.get<{ file_name: string; source: string | null }>('SELECT file_name, source FROM uploads WHERE id = ?', uploadId);
+  if (!u) return { error: tx('Upload not found', 'アップロードが見つかりません'), status: 404 as const };
+  if (u.source !== 'GSC' || !/^gsc-[a-z]+$/.test(table)) return { error: tx('Only Google Search Console data can be downloaded here.', 'ここでダウンロードできるのは Google Search Console のデータのみです。'), status: 400 as const };
+  // Excel sheets are stored as "<structure> (<sheet>)".
+  const records = await db.all<{ values_json: string }>(
+    `SELECT values_json FROM raw_records WHERE upload_id = ? AND status = 'valid' AND (table_name = ? OR table_name LIKE ?) ORDER BY id`,
+    uploadId, table, `${table} (%`,
+  );
+  if (!records.length) return { error: tx(`No valid ${table} rows in this upload.`, `このアップロードに有効な ${table} の行はありません。`), status: 404 as const };
+  const needle = search.trim().toLowerCase();
+  const rows = records
+    .map((r) => JSON.parse(r.values_json) as Record<string, string>)
+    .filter((r) => !needle || String(Object.values(r)[0] ?? '').toLowerCase().includes(needle));
+  if (!rows.length) return { error: tx(`No ${table} rows match "${search.trim()}".`, `「${search.trim()}」に一致する ${table} の行はありません。`), status: 404 as const };
+  const columns = [...new Set(rows.flatMap((r) => Object.keys(r)))];
+  const asValue = (v: string | undefined) => (v !== undefined && /^-?\d+(\.\d+)?$/.test(v) ? Number(v) : v ?? '');
+  return { fileName: u.file_name, table, columns, rows: rows.map((r) => columns.map((c) => asValue(r[c]))) };
+}
+
 // ---------- Period comparison ----------
 
 export interface ComparisonResult {

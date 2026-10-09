@@ -1,10 +1,13 @@
 import type { Upload } from '@seo/shared';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { dateTime, formatLabel, period } from '../format.ts';
-import { DataTable } from './DataTable.tsx';
+import { DataTable, ShowMore } from './DataTable.tsx';
 import { StatusBadge } from './StatusBadge.tsx';
 import { Icon } from './Icon.tsx';
 import { t } from '../i18n.ts';
+
+/** Files shown before "Show more". */
+const COLLAPSED = 2;
 
 /** Header checkbox: checked when every row is selected, indeterminate when only some are. */
 function SelectAll({ total, checked, onChange }: { total: number; checked: number; onChange: (all: boolean) => void }) {
@@ -40,9 +43,15 @@ export function ImportSummary({ uploads, selectedId, onSelect, onDelete, checked
     else next.delete(id);
     onCheckedChange(next);
   };
+  // Collapsed: only the first files are rendered. Selections, deletes and the context use the full list, so expanding
+  // or collapsing never reloads data or changes what is ticked.
+  const [showAllFiles, setShowAllFiles] = useState(false);
+  const hidden = Math.max(0, uploads.length - COLLAPSED);
+  const rows = showAllFiles ? uploads : uploads.slice(0, COLLAPSED);
   return (
+    <>
     <DataTable
-      rows={uploads}
+      rows={rows}
       rowKey={(u) => u.id}
       selectedKey={selectedId}
       onRowClick={onSelect}
@@ -61,26 +70,49 @@ export function ImportSummary({ uploads, selectedId, onSelect, onDelete, checked
             />
           ),
         },
-        { key: 'id', label: '#', num: true, render: (u) => <span className="muted">{u.id}</span> },
         {
           key: 'file',
           label: t('File name'),
           render: (u) => (
             <span className="cell-file" title={u.fileName}>
               <Icon name="file" size={16} />
-              <strong className="truncate">{u.fileName}</strong>
+              <span style={{ minWidth: 0 }}>
+                <strong className="truncate" style={{ display: 'block' }}>{u.fileName}</strong>
+                <span className="cell-sub mono truncate">{u.structure ?? '—'}</span>
+              </span>
             </span>
           ),
         },
-        { key: 'source', label: t('Source'), render: (u) => (u.source === 'GSC' ? 'Google Search Console' : u.source ?? t('Unknown')) },
-        { key: 'type', label: t('File type'), render: (u) => <span className="badge">{formatLabel(u.fileType)}</span> },
-        { key: 'structure', label: t('Detected structure'), render: (u) => <span className="mono nowrap">{u.structure ?? '—'}</span> },
-        { key: 'rows', label: t('Rows (valid / total)'), num: true, render: (u) => `${u.validRowCount.toLocaleString()} / ${u.rowCount.toLocaleString()}` },
+        {
+          key: 'source',
+          label: t('Source'),
+          render: (u) => (
+            <span className="nowrap">
+              {u.source === 'GSC' ? 'Search Console' : u.source ?? t('Unknown')}
+              <span className="cell-sub">{formatLabel(u.fileType)}</span>
+            </span>
+          ),
+        },
+        { key: 'rows', label: t('Rows'), num: true, render: (u) => <span title={`${u.validRowCount.toLocaleString()} / ${u.rowCount.toLocaleString()}`}>{u.validRowCount.toLocaleString()}</span> },
         { key: 'period', label: t('Analysis period'), render: (u) => <span className="nowrap tabular" title={u.periodNote ?? ''}>{period(u.period)}</span> },
-        { key: 'import', label: t('Import status'), render: (u) => <StatusBadge status={u.importStatus} /> },
-        { key: 'validation', label: t('Validation'), render: (u) => <StatusBadge status={u.validationStatus} /> },
-        { key: 'warnings', label: t('Warnings'), num: true, render: (u) => (u.errorCount ? `${t('{n} error', { n: u.errorCount })} · ${u.warningCount}` : u.warningCount) },
-        { key: 'time', label: t('Uploaded'), render: (u) => <span className="nowrap tabular muted">{dateTime(u.uploadedAt)}</span> },
+        {
+          // Imported files show their validation; files that were not imported show why.
+          key: 'status',
+          label: t('Status'),
+          render: (u) =>
+            u.importStatus === 'imported' ? (
+              <StatusBadge status={u.validationStatus} title={`${t('Imported')} · ${t(u.validationStatus === 'valid' ? 'Valid' : u.validationStatus === 'invalid' ? 'Invalid' : 'Valid with warnings')}`} />
+            ) : (
+              <StatusBadge status={u.importStatus} />
+            ),
+        },
+        {
+          key: 'warnings',
+          label: t('Warnings'),
+          num: true,
+          render: (u) => (u.errorCount ? <span className="nowrap" style={{ color: 'var(--critical)' }}>{t('{n} error', { n: u.errorCount })} · {u.warningCount}</span> : u.warningCount ? <span style={{ color: 'var(--warning)' }}>{u.warningCount}</span> : <span className="muted">0</span>),
+        },
+        { key: 'time', label: t('Uploaded'), render: (u) => <span className="nowrap tabular muted small">{dateTime(u.uploadedAt)}</span> },
         {
           key: 'delete',
           stickyEnd: true,
@@ -93,5 +125,11 @@ export function ImportSummary({ uploads, selectedId, onSelect, onDelete, checked
         },
       ]}
     />
+    {hidden > 0 && (
+      <div className="show-more">
+        <ShowMore hidden={hidden} expanded={showAllFiles} onToggle={() => setShowAllFiles((v) => !v)} one="Show more (1 file)" many="Show more ({n} files)" />
+      </div>
+    )}
+    </>
   );
 }

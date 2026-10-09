@@ -6,7 +6,6 @@ export function AppSidebar({ active, onOpen, open, onClose }: { active: boolean;
     <>
       <div className={`sidebar-backdrop${open ? ' open' : ''}`} onClick={onClose} />
       <aside className={`sidebar${open ? ' open' : ''}`} aria-label={t('Applications')}>
-        <div className="section-label">{t('Applications')}</div>
         <button
           className={`nav-item${active ? ' active' : ''}`}
           onClick={() => (onOpen(), onClose())}

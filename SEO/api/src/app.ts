@@ -2,7 +2,7 @@ import { Hono, type Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import type { Source } from '@seo/shared';
 import { configSummary, type AppConfig } from './config.ts';
-import { comparison, dataFilters, ga4Overview, listData, rawRecords, topRows, trends, type Dimension } from './data.ts';
+import { comparison, dataFilters, exportGscTable, ga4Overview, listData, rawRecords, topRows, trends, type Dimension } from './data.ts';
 import type { DB } from './db.ts';
 import { deleteUpload, deleteUploadWithRuns, getUpload, importUploads, listUploads } from './import/index.ts';
 import { latestGa4Date, runMeasurements } from './measure/engine.ts';
@@ -23,7 +23,8 @@ import {
   amendText,
   monitoring,
 } from './measure/read.ts';
-import { generateReport } from './report.ts';
+import { generateReport, renderText } from './report.ts';
+import { generateGscReport, gscOverview } from './gsc-report.ts';
 import { defaultCurrentEnd, detectAllPeriods, testDataParam, uploadIdsParam, withScope, withTestData } from './periods.ts';
 import { enc, langOf, localize, tx } from './i18n.ts';
 import { analyzeUploads } from './analysis.ts';
@@ -91,6 +92,11 @@ export function createApp(db: DB, cfg: AppConfig, ont: Ontology) {
   });
   /** Source records line by line, as read from the file. */
   app.get('/uploads/:id/data', async (c) => send(c, await rawRecords(db, Number(c.req.param('id')), int(c.req.query('limit')) ?? 200, int(c.req.query('offset')) ?? 0)));
+  /** All valid rows of one Search Console table of an upload (?table=gsc-page[&search=…]), for the formatted Excel report. */
+  app.get('/uploads/:id/export', async (c) => {
+    const r = await exportGscTable(db, Number(c.req.param('id')), c.req.query('table') ?? '', c.req.query('search') ?? '');
+    return 'error' in r ? send(c, { error: r.error }, r.status) : send(c, r);
+  });
   /**
    * Deletes an upload. Measurement runs that used it as evidence are deleted with it and the latest
    * week is measured again from the remaining data — unless the SEO team already recorded decisions
@@ -134,6 +140,8 @@ export function createApp(db: DB, cfg: AppConfig, ont: Ontology) {
     );
   });
   app.get('/data/filters', async (c) => send(c, await dataFilters(db, await reqCfg(c))));
+  /** GSC data coverage, daily totals, snapshots and validation warnings; never an OK / NG result. */
+  app.get('/data/gsc-overview', async (c) => send(c, await gscOverview(db, await reqCfg(c))));
   app.get('/data/ga4-overview', async (c) => send(c, await ga4Overview(db, await reqCfg(c))));
   /** Valid week-on-week periods per source, detected from the uploaded data (newest first). */
   app.get('/periods', async (c) => send(c, await detectAllPeriods(db, await reqCfg(c))));
@@ -232,6 +240,17 @@ export function createApp(db: DB, cfg: AppConfig, ont: Ontology) {
     return new Response(r.content, {
       headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Content-Disposition': `attachment; filename="${r.fileName}"` },
     });
+  });
+
+  // GSC Performance Report: its own report from the stored GSC data; no measurement run is involved.
+  app.post('/reports/gsc', async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { uploadIds?: number[]; includeTestData?: boolean };
+    const scoped = await withScope(db, cfg, Array.isArray(body.uploadIds) ? body.uploadIds : undefined);
+    return send(c, await generateGscReport(db, scoped, lang(c), renderText));
+  });
+  app.get('/reports/gsc/download', async (c) => {
+    const r = await generateGscReport(db, await reqCfg(c), lang(c), renderText);
+    return new Response(r.content, { headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Content-Disposition': `attachment; filename="${r.fileName}"` } });
   });
 
   return app;

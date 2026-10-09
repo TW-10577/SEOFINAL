@@ -17,7 +17,6 @@ export function GscEvidencePanel({ detail }: { detail: MeasurementDetail }) {
     <section className="card">
       <div className="card-head">
         <h2>{t('GSC Supporting Evidence')}</h2>
-        <span className="hint">{t('Evidence for M1, not a separate measurement — GSC has no OK / NG.')}</span>
       </div>
       <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         {!g ? (

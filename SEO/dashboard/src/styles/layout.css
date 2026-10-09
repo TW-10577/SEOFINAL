@@ -78,7 +78,8 @@
 .page-head .sub { color: var(--text-muted); font-size: var(--text-base); }
 
 /* Tabs: underline style */
-.page-tabs { display: flex; gap: var(--space-1); margin-top: var(--space-5); border-bottom: 1px solid var(--border); overflow-x: auto; }
+.page-tabs { display: flex; gap: var(--space-1); margin-top: var(--space-5); border-bottom: 1px solid var(--border); overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+.page-tabs::-webkit-scrollbar { display: none; }
 .page-tabs .tab {
   display: inline-flex;
   align-items: center;
@@ -100,6 +101,9 @@
 .page-tabs .tab.active { color: var(--brand-700); border-bottom-color: var(--brand-700); font-weight: 600; }
 .page-tabs .tab .step { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: var(--radius-pill); font-size: 11px; font-weight: 600; background: var(--surface-3); color: var(--text-muted); }
 .page-tabs .tab.active .step { background: var(--brand-700); color: #fff; }
+.page-tabs .tab.done .step { background: var(--brand-100); color: var(--brand-700); }
+.page-tabs .tab .icon { opacity: 0.8; }
+.page-tabs .tab.active .icon { opacity: 1; }
 
 .content { padding: var(--space-6) var(--space-8) var(--space-10); display: flex; flex-direction: column; gap: var(--space-5); min-width: 0; max-width: var(--content-max); width: 100%; }
 
@@ -128,6 +132,15 @@
 }
 
 /* Title row: title on the left, page actions (e.g. report) in the top-right corner. */
-.page-head-top { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; }
+.page-head-top { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3) var(--space-4); flex-wrap: wrap; }
 .page-actions:empty { display: none; }
-.page-actions { padding-top: var(--space-5); }
+.page-actions { display: flex; align-items: center; }
+
+/* ---------- Print: a clean report / page without the app chrome ---------- */
+@media print {
+  body { background: #fff; }
+  .topbar, .sidebar, .sidebar-backdrop, .page-tabs, .page-actions, .no-print, .toasts { display: none !important; }
+  .page-head, .content { padding: 0 0 var(--space-4); max-width: none; }
+  .card, .report-section { box-shadow: none; break-inside: avoid; }
+  .table-wrap { max-height: none !important; overflow: visible; }
+}

@@ -331,11 +331,11 @@ function gscSummary(an: NonNullable<CauseHypothesisAnalysis>, L: (en: string, ja
   // Device and country names are whole values: translated in English (search queries and URLs are not).
   const name = (s: GscSnapshot, key: string) => (lang === 'en' && (s === g.devices || s === g.countries) ? translateDataTerms(key) : key);
   const top = (s: GscSnapshot, k = 3) => s.top.slice(0, k).map((r) => `${name(s, r.key)}${r.share !== null ? ` (${r.share}%)` : ''}`).join(', ');
-  if (g.pages.available) rows.push([L('Top pages', '上位ページ'), top(g.pages)]);
+  if (g.pages.available) rows.push([L('Top pages (snapshot, whole period)', '上位ページ（スナップショット・期間全体）'), top(g.pages)]);
   if (g.queries.available)
-    rows.push([L('Top queries', '上位クエリ'), `${top(g.queries)}${g.queries.brandShare !== null ? ` — ${L('brand share', 'ブランドの割合')} ${g.queries.brandShare}%` : ''}`]);
+    rows.push([L('Top queries (snapshot, whole period)', '上位クエリ（スナップショット・期間全体）'), `${top(g.queries)}${g.queries.brandShare !== null ? ` — ${L('brand share', 'ブランドの割合')} ${g.queries.brandShare}%` : ''}`]);
   const split = [g.devices.available ? `${L('Devices', 'デバイス')}: ${top(g.devices)}` : '', g.countries.available ? `${L('Countries', '国')}: ${top(g.countries, 2)}` : ''].filter(Boolean);
-  if (split.length) rows.push([L('Device / country', 'デバイス / 国'), split.join(' · ')]);
+  if (split.length) rows.push([L('Device / country (snapshot, whole period)', 'デバイス / 国（スナップショット・期間全体）'), split.join(' · ')]);
   return [
     { t: 'kv', rows },
     { t: 'p', text: L('Search Console has no OK / NG of its own: it is used by the GSC_R01 investigation when M1 is NG with organic sessions decreasing. Top pages, queries, devices and countries above are period totals (shares of clicks).', 'Search Console には独自の OK / NG はありません。M1 が NG でオーガニックのセッションが減少したときに GSC_R01 の調査で使用します。上記の上位ページ・クエリ・デバイス・国は期間合計（クリック数のシェア）です。'), tone: 'muted' },

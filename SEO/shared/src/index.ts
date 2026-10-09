@@ -612,6 +612,44 @@ export interface Monitoring {
   closed: number;
 }
 
+// ---------- GSC overview and GSC Performance Report ----------
+
+export interface GscTotals {
+  clicks: number | null;
+  impressions: number | null;
+  /** Percent, clicks ÷ impressions × 100. */
+  ctr: number | null;
+  /** Impression-weighted average of the daily positions. */
+  position: number | null;
+}
+
+export interface GscOverview {
+  uploads: { id: number; fileName: string; structure: string | null; period: Period | null; validationStatus: string; rowCount: number; validRowCount: number }[];
+  /** The dated Chart by Date: the only GSC data with dates. */
+  daily: {
+    available: boolean;
+    range: Period | null;
+    days: number;
+    missingDates: string[];
+    totals: GscTotals;
+    points: { date: string; clicks: number; impressions: number; ctr: number | null; position: number | null }[];
+    /** Compared only when two complete 7-day periods exist in the dated data. */
+    comparison: { current: Period; previous: Period; rows: { metric: string; previous: number | null; current: number | null; absoluteChange: number | null; changeRate: number | null }[] } | null;
+  };
+  /** Whole-period snapshot tables (no dates): which exports exist for each dimension. */
+  snapshots: Record<'query' | 'page' | 'country' | 'device' | 'appearance', { available: boolean; upload: { id: number; fileName: string; period: Period | null } | null; rows: number }>;
+  warnings: { severity: string; message: string; fileName: string; code: string }[];
+}
+
+export interface GscReport {
+  source: 'GSC';
+  fileName: string;
+  generatedAt: string;
+  content: string;
+  doc: ReportDoc;
+}
+
+
 // ---------- Report ----------
 
 /** Generated on request from the database (a view output, not stored). */

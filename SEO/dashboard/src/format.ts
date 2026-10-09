@@ -1,4 +1,4 @@
-import { t } from './i18n.ts';
+import { currentLang, t } from './i18n.ts';
 
 export const METRIC_LABEL: Record<string, string> = {
   sessions: 'Sessions',
@@ -51,5 +51,42 @@ const FORMAT_LABEL: Record<string, string> = {
 };
 export const formatLabel = (f: string) => FORMAT_LABEL[f] ?? f.toUpperCase();
 
+/** Axis label for an ISO day: "Oct 4" / "10/4". */
+export function dayLabel(iso: string): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return iso;
+  return currentLang() === 'ja' ? `${d.getUTCMonth() + 1}/${d.getUTCDate()}` : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+}
+
+/** Tooltip label for an ISO day with the weekday: "Sun, Oct 4, 2026" / "2026/10/4 (日)". */
+export function dayLong(iso: string): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return iso;
+  return currentLang() === 'ja'
+    ? `${d.getUTCFullYear()}/${d.getUTCMonth() + 1}/${d.getUTCDate()} (${'日月火水木金土'[d.getUTCDay()]})`
+    : d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+}
+
 export const dateTime = (iso: string) => iso.slice(0, 16).replace('T', ' ');
 export const period = (p: { start: string; end: string } | null | undefined) => (p ? `${p.start} – ${p.end}` : '—');
+
+const isRatio = (metric: string) => metric === 'cvr' || metric === 'ctr';
+
+/** Business formatting: ratios as percentages (CVR 0.961%), position with 2 decimals, counts with separators. */
+export function fmtValue(metric: string, v: number | null | undefined): string {
+  if (v === null || v === undefined) return '—';
+  if (isRatio(metric)) return `${v.toFixed(3)}%`;
+  if (metric === 'position') return v.toFixed(2);
+  return num(v);
+}
+
+/** Absolute difference: ratios in percentage points, counts as signed numbers. */
+export function fmtDiff(metric: string, v: number | null | undefined): string {
+  if (v === null || v === undefined) return '—';
+  const sign = v > 0 ? '+' : v < 0 ? '−' : '';
+  if (isRatio(metric)) return `${sign}${Math.abs(v).toFixed(3)} pt`;
+  if (metric === 'position') return `${sign}${Math.abs(v).toFixed(2)}`;
+  return `${sign}${num(Math.abs(v))}`;
+}
+
+export const fmtRate = (v: number | null | undefined) => (v === null || v === undefined ? '—' : `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toFixed(2)}%`);

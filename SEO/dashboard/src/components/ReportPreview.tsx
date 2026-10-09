@@ -1,4 +1,4 @@
-import type { Report, ReportBlock } from '@seo/shared';
+import type { ReportBlock, ReportDoc } from '@seo/shared';
 import { useState } from 'react';
 import { dateTime } from '../format.ts';
 import { t } from '../i18n.ts';
@@ -11,7 +11,7 @@ const RESULT_CELL: Record<string, string> = { OK: 'OK', NG: 'NG', 'NOT EVALUABLE
 const NUMERIC = /^[-+−]?[\d,.]+\s?(%|pt)?$|^—$/;
 
 /** The report as a readable document (sections, key–value lists, tables, status chips); the TXT file is one click away. */
-export function ReportPreview({ report }: { report: Report }) {
+export function ReportPreview({ report }: { report: { fileName: string; generatedAt: string; content: string; doc: ReportDoc; runId?: number } }) {
   const [view, setView] = useState<'formatted' | 'text'>('formatted');
   const { doc } = report;
   return (
@@ -20,7 +20,9 @@ export function ReportPreview({ report }: { report: Report }) {
         <div>
           <h2 className="report-title">{doc.title}</h2>
           <div className="small muted">
-            {t('{file} · generated {time} from measurement run #{run}', { file: report.fileName, time: dateTime(report.generatedAt), run: report.runId })}
+            {report.runId
+              ? t('{file} · generated {time} from measurement run #{run}', { file: report.fileName, time: dateTime(report.generatedAt), run: report.runId })
+              : t('{file} · generated {time} from the stored Search Console data', { file: report.fileName, time: dateTime(report.generatedAt) })}
           </div>
         </div>
         <div className="segmented" role="tablist" aria-label={t('Report view')}>

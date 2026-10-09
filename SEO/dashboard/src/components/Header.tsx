@@ -31,18 +31,31 @@ export function TopBar({ lang, onLang, onMenu }: { lang: Lang; onLang: (l: Lang)
 export const PAGE_ACTIONS_ID = 'page-actions';
 
 /** Page title block (page actions on the right) with the page tabs underneath. */
-export function Header({ title, subtitle, nav }: { title: string; subtitle: string; nav?: ReactNode }) {
+export function Header({ title, subtitle, nav }: { title: string; subtitle?: string; nav?: ReactNode }) {
   return (
     <div className="page-head">
       <div className="page-head-top">
         <div>
-          <div className="eyebrow">{t('SEO Page Performance')}</div>
           <h1>{title}</h1>
-          <div className="sub">{subtitle}</div>
+          {subtitle && <div className="sub">{subtitle}</div>}
         </div>
         <div id={PAGE_ACTIONS_ID} className="page-actions" />
       </div>
       {nav}
+    </div>
+  );
+}
+
+/** Heading for a group of related cards. */
+export function SectionTitle({ eyebrow, title, hint, children }: { eyebrow?: string; title: string; hint?: string; children?: ReactNode }) {
+  return (
+    <div className="section-title">
+      <div>
+        {eyebrow && <span className="eyebrow">{eyebrow}</span>}
+        <h2>{t(title)}</h2>
+        {hint && <div className="hint">{t(hint)}</div>}
+      </div>
+      {children && <div className="card-actions">{children}</div>}
     </div>
   );
 }

@@ -1002,4 +1002,20 @@ const JA: Record<string, string> = {
   'detected from the column names': '列名から検出',
   'chosen by the user': 'ユーザーが選択',
   'not detected': '未検出',
+  // Business insights: the M1 / M2 verdict per figure.
+  'Beyond {th} ({code})': '{th} 超過（{code}）',
+  'Within {th} ({code})': '{th} 以内（{code}）',
+  'Not evaluable ({code})': '評価不可（{code}）',
+  'No figure moved beyond its threshold, so no cause analysis is needed.': 'しきい値を超えて変化した指標はないため、原因分析は不要です。',
+  // Measurements without GA4 data.
+  'Upload GA4 data first.': '先に GA4 データをアップロードしてください。',
+  'No GA4 data uploaded.': 'GA4 データがアップロードされていません。',
+  'Upload a GA4 export on Data Import, then run the measurements.': 'データ取り込みで GA4 のエクスポートをアップロードしてから、測定を実行してください。',
+  // Rule checks: result in plain words.
+  'OK — Within threshold': 'OK — しきい値の範囲内',
+  'NG — Threshold exceeded': 'NG — しきい値超過',
+  'Not evaluable': '評価不可',
+  'Allowed threshold': '許容しきい値',
+  '{n} sessions': '{n} セッション',
+  'This result uses dates the uploaded file marks as not real (test data). It is not a business result.': 'この結果は、アップロードファイルで実データではないとされた日付（テストデータ）を使用しています。業務上の結果ではありません。',
 };

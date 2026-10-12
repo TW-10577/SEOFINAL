@@ -49,6 +49,8 @@ export function MeasurementsPage({ ctx, onCtx, onContinue }: { ctx: ImportContex
 
   const current = data.data;
   const ga4 = cr.periods?.GA4;
+  // No GA4 data uploaded (in this context): nothing to measure.
+  const noGa4 = !!cr.periods && !ga4?.range;
   return (
     <>
       <section className="card toolbar">
@@ -73,7 +75,7 @@ export function MeasurementsPage({ ctx, onCtx, onContinue }: { ctx: ImportContex
             </label>
           )}
           <span className="spacer" />
-          <button className="btn" onClick={run} disabled={cr.running} title={t('Week on week, detected from the uploaded GA4 data: the current week and the 7 days before it. OK / NG is calculated by the system.')}>
+          <button className="btn" onClick={run} disabled={cr.running || noGa4} title={noGa4 ? t('Upload GA4 data first.') : t('Week on week, detected from the uploaded GA4 data: the current week and the 7 days before it. OK / NG is calculated by the system.')}>
             <Icon name={cr.running ? 'loader' : 'refresh'} size={15} className={cr.running ? 'spin' : undefined} />
             {cr.running ? t('Running…') : t('Run measurements')}
           </button>
@@ -87,7 +89,8 @@ export function MeasurementsPage({ ctx, onCtx, onContinue }: { ctx: ImportContex
 
       {data.error != null && <ErrorState error={data.error} onRetry={data.reload} />}
       {(cr.running || (data.loading && !current) || (hasContext && !cr.runId && !cr.error)) && <LoadingState />}
-      {!hasContext && current && !current.run && <EmptyState title="No measurement run yet.">{t('Choose the current week and press Run measurements.')}</EmptyState>}
+      {noGa4 && !current?.run && <EmptyState title="No GA4 data uploaded.">{t('Upload a GA4 export on Data Import, then run the measurements.')}</EmptyState>}
+      {!noGa4 && !hasContext && current && !current.run && <EmptyState title="No measurement run yet.">{t('Choose the current week and press Run measurements.')}</EmptyState>}
 
       {current?.run && (
         <>

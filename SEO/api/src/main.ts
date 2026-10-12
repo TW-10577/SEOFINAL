@@ -2,6 +2,7 @@ import { serve } from '@hono/node-server';
 import { createApp } from './app.ts';
 import { loadConfig } from './config.ts';
 import { openDb } from './db.ts';
+import { deleteDatalessRuns } from './import/index.ts';
 import { loadOntology, startupProblems } from './ontology.ts';
 
 const port = Number(process.env.PORT ?? 8787);
@@ -18,6 +19,9 @@ const db = await openDb().catch((e: Error) => {
   console.error(`Database connection failed: ${e.message}`);
   process.exit(1);
 });
+// Runs whose data has been deleted (e.g. made before any upload) only show empty dates: remove them.
+const stale = await deleteDatalessRuns(db);
+if (stale.length) console.log(`Removed measurement runs without data: #${stale.join(', #')}`);
 const app = createApp(db, cfg, ont);
 serve({ fetch: app.fetch, port }, () =>
   console.log(

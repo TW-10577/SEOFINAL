@@ -1,5 +1,5 @@
 import type { Ga4Overview, Measurement, MeasurementDetail, MeasurementRun, Report } from '@seo/shared';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { api, postJson, query } from '../api.ts';
 import { Icon } from '../components/Icon.tsx';
@@ -77,6 +77,8 @@ function Ga4ReportView({ ctx, onCtx, onBack }: { ctx: ImportContext; onCtx: (pat
   const ga4 = summary.data?.periods.GA4;
   const periodMismatch = !!run && !!ga4 && (ga4.current.start !== run.current.start || ga4.previous.start !== run.previous.start);
   const overall = overallOf(measurements);
+  // Stored M1 / M2 results: Business Insights reads OK / NG from them, as the Measurements page does.
+  const results = useMemo(() => Object.fromEntries(measurements.map((m) => [m.ruleCode, m.status])), [measurements]);
 
   return (
     <>
@@ -127,6 +129,7 @@ function Ga4ReportView({ ctx, onCtx, onBack }: { ctx: ImportContext; onCtx: (pat
               weeks={summary.data.periods.GA4 ?? { current: run.current, previous: run.previous }}
               overview={overview.data}
               rules={config.data.rules}
+              results={results}
               testData={measurements.some((m) => m.dataKind === 'test')}
               gscAvailable={!!summary.data.periods.GSC}
             />

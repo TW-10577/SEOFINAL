@@ -336,6 +336,29 @@ export async function deleteUploadWithRuns(db: DB, id: number): Promise<{ delete
     if (decided.length) return { blockedBy: decided };
     for (const run of runs) await db.run('DELETE FROM measurement_runs WHERE id = ?', run);
     await deleteUpload(db, id);
-    return { deletedRuns: runs };
+    return { deletedRuns: [...runs, ...(await deleteDatalessRuns(db))] };
   });
+}
+
+/**
+ * Runs left without data: no measurement used an uploaded value and the GA4 data they were made for is gone (their
+ * own uploads deleted, or — for a run of "all data" — no GA4 upload left at all). They only show dates with nothing
+ * behind them, so they are removed. Such runs never have an anomaly, so no SEO team decision is lost.
+ */
+export async function deleteDatalessRuns(db: DB): Promise<number[]> {
+  const ga4 = new Set(await db.values<number>(`SELECT id FROM uploads WHERE source = 'GA4' AND import_status = 'imported'`));
+  const runs = await db.all(
+    `SELECT r.id, r.scope_json FROM measurement_runs r
+     WHERE NOT EXISTS (SELECT 1 FROM measurements m JOIN measurement_sources ms ON ms.measurement_id = m.id WHERE m.run_id = r.id)
+       AND NOT EXISTS (SELECT 1 FROM measurements m JOIN anomalies a ON a.measurement_id = m.id WHERE m.run_id = r.id)
+     ORDER BY r.id`,
+  );
+  const gone = runs
+    .filter((r) => {
+      const ids = parseJson<{ uploadIds?: number[] }>(r.scope_json, {}).uploadIds ?? [];
+      return ids.length ? !ids.some((u) => ga4.has(u)) : ga4.size === 0;
+    })
+    .map((r) => r.id as number);
+  for (const run of gone) await db.run('DELETE FROM measurement_runs WHERE id = ?', run);
+  return gone;
 }

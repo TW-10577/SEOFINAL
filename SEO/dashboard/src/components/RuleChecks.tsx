@@ -34,6 +34,16 @@ function limit(m: Measurement) {
   return <>±{m.thresholdValue}<div className="small caveat nowrap">{t('unit pending')}</div></>;
 }
 
+/** The result in a few words: OK — within threshold, NG — threshold exceeded, or not evaluable. */
+const HEADLINE: Record<string, string> = { OK: 'OK — Within threshold', NG: 'NG — Threshold exceeded', NOT_EVALUABLE: 'Not evaluable' };
+
+/** A measured value with its unit: "675,290 sessions", "0.877%". */
+function measured(metric: string, v: number | null) {
+  if (v === null) return '—';
+  if (metric === 'sessions') return t('{n} sessions', { n: metricValue(metric, v) });
+  return metric === 'cvr' || metric === 'ctr' ? `${metricValue(metric, v)}%` : metricValue(metric, v);
+}
+
 function ResultBadge({ status }: { status: string }) {
   if (status === 'NOT_EVALUABLE') return <span className="badge">{t('Not checked')}</span>;
   return <StatusBadge status={status} />;
@@ -154,10 +164,25 @@ function Expanded({ m, run, onReview }: { m: Measurement; run: MeasurementRun; o
         </div>
         <div className="detail-block">
           <span className="detail-label">{t('Result')}</span>
-          <div><ResultBadge status={m.status} /> {m.reason}</div>
+          <div className="result-head"><ResultBadge status={m.status} /> <strong>{t(HEADLINE[m.status] ?? m.status)}</strong></div>
+          <div>{m.reason}</div>
+          {m.status !== 'NOT_EVALUABLE' && (
+            <dl className="result-figures">
+              <dt>{t('Previous week')} <span className="muted">({span(run.previous)})</span></dt><dd>{measured(m.metric, m.previousValue)}</dd>
+              <dt>{t('Current week')} <span className="muted">({span(run.current)})</span></dt><dd>{measured(m.metric, m.currentValue)}</dd>
+              <dt>{t('Change')}</dt><dd>{pct(m.changeRate, 2)}</dd>
+              <dt>{t('Allowed threshold')}</dt><dd>{limit(m)}</dd>
+            </dl>
+          )}
           {m.caveats.length > 0 && <div className="small caveat">⚠ {m.caveats.join(' · ')}</div>}
         </div>
       </div>
+
+      {m.dataKind === 'test' && (
+        <div className="notice warn small" role="note">
+          <strong>{t('TEST DATA')}</strong> — {t('This result uses dates the uploaded file marks as not real (test data). It is not a business result.')}
+        </div>
+      )}
 
       <div className="detail-block">
         <span className="detail-label">{t('Basis')}</span>
@@ -174,7 +199,7 @@ function Expanded({ m, run, onReview }: { m: Measurement; run: MeasurementRun; o
         />
       </div>
 
-      {m.why && (
+      {m.status === 'NG' && m.why && (
         <div className="detail-block">
           <span className="detail-label">{m.why.title}</span>
           <div className="detail-why">
@@ -205,7 +230,7 @@ function Expanded({ m, run, onReview }: { m: Measurement; run: MeasurementRun; o
         <span className="spacer" />
         <button className="btn small" onClick={() => onReview(m.id)}>
           <Icon name="search" size={14} />
-          {m.why ? t('Evidence, GSC supporting evidence & SEO team review') : t('Evidence & detail')}
+          {m.status === 'NG' && m.why ? t('Evidence, GSC supporting evidence & SEO team review') : t('Evidence & detail')}
           <Icon name="arrowRight" size={14} />
         </button>
       </div>

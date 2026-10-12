@@ -174,6 +174,10 @@ export function createApp(db: DB, cfg: AppConfig, ont: Ontology) {
     // includeTestData: include / leave out the dates the export marks as not real for this run (default: rules.yaml).
     // uploadIds: the active import context — the run uses only these uploads (per source).
     const runCfg = await withScope(db, withTestData(cfg, typeof body.includeTestData === 'boolean' ? body.includeTestData : undefined), body.uploadIds);
+    // No GA4 upload (in the context): nothing to measure, so no run with empty dates is made.
+    const ga4Uploads = await db.values<number>(`SELECT id FROM uploads WHERE source = 'GA4' AND import_status = 'imported'`);
+    if (!ga4Uploads.some((id) => !body.uploadIds?.length || body.uploadIds.includes(id)))
+      return send(c, { error: enc(tx('No GA4 data has been uploaded. Upload a GA4 export on Data Import before running the measurements.', 'GA4 データがアップロードされていません。測定を実行する前に、データ取り込みで GA4 のエクスポートをアップロードしてください。')) }, 409);
     const runId = await runMeasurements(db, runCfg, { currentEnd: body.currentEnd });
     return send(c, { run: await getRun(db, runId), measurements: await listMeasurements(db, cfg, runId) }, 201);
   });

@@ -18,6 +18,7 @@ import {
 import { ruleMetric, type AppConfig, type SegmentRole } from '../config.ts';
 import { nowIso, parseJson, type DB } from '../db.ts';
 import { cat, dec, enc, tx, type LText } from '../i18n.ts';
+import { explainResult, NOT_EVALUABLE_REASON } from './logic.ts';
 import { EDIT_ACTIONS, guardHolds, lifecycleOf, nextTransitions, stateCode, type Guard, type GovernedEntity, type Ontology } from '../ontology.ts';
 
 type Row = Record<string, any>;
@@ -80,7 +81,7 @@ async function toMeasurement(db: DB, r: Row, cfg: AppConfig): Promise<Measuremen
     thresholdUnit: r.threshold_unit,
     result: r.result,
     status: r.status,
-    reason: r.reason,
+    reason: plainReason(r, r.metric ?? rule?.metric ?? ''),
     createdAt: r.created_at,
     anomalyId: r.anomaly_id ?? null,
     // Short possible cause: the SEO team's text when modified, else the generated title.
@@ -93,6 +94,18 @@ async function toMeasurement(db: DB, r: Row, cfg: AppConfig): Promise<Measuremen
     basis: await basisFor(db, cfg, r.run_id, r.rule_id, r.status),
     why: r.status === 'NG' && r.anomaly_id ? await whyNg(db, r, rule) : null,
   };
+}
+
+/**
+ * The result in plain words, built from the stored figures so runs saved with the older technical text read the same:
+ * OK / NG → direction, size and threshold; NOT_EVALUABLE → the standard sentence and the stored specific reason.
+ */
+function plainReason(r: Row, metric: string): string {
+  const plain = explainResult({ status: r.status, metric, rate: r.change_rate ?? null, threshold: r.threshold_value, unit: r.threshold_unit });
+  if (plain) return enc(plain);
+  const stored = dec(r.reason);
+  if (r.status !== 'NOT_EVALUABLE' || stored.en.startsWith(NOT_EVALUABLE_REASON.en)) return r.reason;
+  return enc(cat([NOT_EVALUABLE_REASON, stored]));
 }
 
 /**

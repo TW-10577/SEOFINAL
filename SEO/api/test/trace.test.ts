@@ -44,7 +44,8 @@ describe('client dummy data (two GA4 weeks)', () => {
     const { r1 } = (await clientRun());
     assert.equal(r1.measurement.status, 'NG');
     assert.match(r1.measurement.result, /^\[TEST DATA\]/);
-    assert.match(r1.measurement.reason, /not a business result/);
+    assert.equal(r1.measurement.dataKind, 'test');
+    assert.doesNotMatch(r1.measurement.reason, /not a business result/, 'the TEST DATA notice is shown separately');
     assert.equal(r1.measurement.changeRate!.toFixed(2), '-4.42');
     assert.equal(r1.cause!.branch, 'organic_traffic_decrease');
     assert.equal(r1.anomaly!.subjectType, 'site');
@@ -63,7 +64,7 @@ describe('client dummy data (two GA4 weeks)', () => {
     assert.match(r1.countermeasures[0]!.reason, /^Organic traffic decreased compared with the previous week\./);
     assert.equal(r1.measurement.caveats.length, 0, 'segments come from rules.yaml input_fields');
     assert.equal(r1.measurement.analysisUnit, 'Site');
-    assert.match(r1.measurement.reason, /Total Sessions decreased by 3\.9% or more compared with the previous week\. total_sessions_wow_percent = -4\.42%/);
+    assert.equal(r1.measurement.reason, 'Total sessions decreased by 4.42% compared with the previous week, exceeding the configured ±3.9% threshold. An anomaly was detected and requires investigation.');
     const g = r1.cause!.analysis!.gscEvidence!;
     assert.equal(g.dateChart.available, true);
     assert.ok(g.pages.available && g.queries.available && g.devices.available && g.countries.available, 'all five GSC parts');
@@ -316,8 +317,8 @@ describe('API', () => {
     const run = (await (await app.request('/api/measurements/run', { method: 'POST', body: '{}', headers: ja })).json()) as any;
     // rules.yaml *_ja texts.
     assert.equal(run.measurements[0].name, '① 集客 - セッション');
-    assert.match(run.measurements[0].reason, /合計セッションが前週比で 3\.9% 以上減少しました。.*条件：total_sessions_wow_percent <= -3\.9。/);
-    assert.match(run.measurements[1].reason, /^.*CVR が前週比（相対）で 0\.7% 以上減少しました。/);
+    assert.match(run.measurements[0].reason, /^合計セッションは前週比で 4\.42% 減少し、設定されたしきい値 ±3\.9% を超えました。/);
+    assert.match(run.measurements[1].reason, /^CVRは前週比で [\d.]+% 減少し、設定されたしきい値 ±0\.7% を超えました。/);
     const detail = (await (await app.request(`/api/measurements/${run.measurements[0].id}`, { headers: ja })).json()) as any;
     assert.equal(detail.countermeasures[0].responsibleTeam, 'SEO チーム');
     assert.match(detail.cause.causeText, /^広告のセッションは減少していない一方で、オーガニックのセッションが減少しました。/);

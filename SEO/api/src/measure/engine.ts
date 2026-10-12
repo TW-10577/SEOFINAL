@@ -8,7 +8,7 @@ import { nowIso, parseJson, type DB } from '../db.ts';
 import { cat, dec, enc, tx, type LText } from '../i18n.ts';
 import { investigateAdvertising, investigateOrganic, type CauseAnalysis, type Finding, type TargetType } from './investigate.ts';
 import { defaultCurrentEnd } from '../periods.ts';
-import { change, fmtNum, fmtPct, ratio, type Change, type Judgment } from './logic.ts';
+import { change, explainResult, fmtNum, fmtPct, NOT_EVALUABLE_REASON, ratio, type Change, type Judgment } from './logic.ts';
 import { dailySeries, daysOf, describeMissing, overlapIssues, sumPeriod, weekPeriods, type DailySeries, type PeriodSum } from './series.ts';
 
 export interface RunOptions {
@@ -306,8 +306,8 @@ async function measureRule(db: DB, cfg: AppConfig, rule: RuleConfig, periods: Pe
   const prev = num(vars[operand('previous') ?? '']);
   const rate = num(vars[spec.judged]);
   if (cur == null || prev == null || rate == null) {
-    const why = missing.length ? cat(missing) : tx(`${spec.judged} cannot be calculated (division by zero).`, `${spec.judged} を計算できません（ゼロ除算）。`);
-    return { ...base, change: null, cause: null, judgment: { status: 'NOT_EVALUABLE', result: NOT_EVALUABLE, reason: why } };
+    const why = missing.length ? cat(missing) : tx('The previous week\'s value is zero, so the week-on-week change cannot be calculated.', '前週の値がゼロのため、前週比を計算できません。');
+    return { ...base, change: null, cause: null, judgment: { status: 'NOT_EVALUABLE', result: NOT_EVALUABLE, reason: cat([NOT_EVALUABLE_REASON, why]) } };
   }
   const judged: Change = { previous: prev, current: cur, abs: cur - prev, rate };
 
@@ -322,7 +322,7 @@ async function measureRule(db: DB, cfg: AppConfig, rule: RuleConfig, periods: Pe
       judgment: {
         status: 'NOT_EVALUABLE',
         result: NOT_EVALUABLE,
-        reason: tx(`${spec.judged} = ${fmtVar(spec.judged, rate)}: no rules.yaml evaluation condition matches.`, `${spec.judged} = ${fmtVar(spec.judged, rate)}：rules.yaml の evaluation に該当する条件がありません。`),
+        reason: cat([NOT_EVALUABLE_REASON, tx(`The measured change (${fmtPct(rate)}) matches none of the rule's evaluation conditions.`, `測定された変化（${fmtPct(rate)}）はルールの評価条件のいずれにも該当しません。`)]),
       },
     };
   const t = rule.thresholdValue;
@@ -330,11 +330,14 @@ async function measureRule(db: DB, cfg: AppConfig, rule: RuleConfig, periods: Pe
     `${spec.judged} = ${fmtPct(rate)} (${fmtVar(operand('previous') ?? '', prev)} → ${fmtVar(operand('current') ?? '', cur)}). Condition: ${hit.condition}.`,
     `${spec.judged} = ${fmtPct(rate)}（${fmtVar(operand('previous') ?? '', prev)} → ${fmtVar(operand('current') ?? '', cur)}）。条件：${hit.condition}。`,
   );
+  // The calculation (rules.yaml reason, variables, matched condition) stays in the evidence for audit; the reason
+  // shown to users is the plain-language explanation.
+  base.evidence.items.push({ group: 'ga4', label: enc(tx('Matched rules.yaml condition', '該当した rules.yaml の条件')), value: enc(cat([hit.reason ?? tx(''), figures])) });
   const judgment = testData(
     {
       status: hit.status,
       result: tx(`${fmtPct(rate)} ${hit.status === 'NG' ? '≥' : '<'} ±${t}%`),
-      reason: cat([hit.reason ?? tx(''), figures]),
+      reason: explainResult({ status: hit.status, metric: rule.metric, rate, threshold: t, unit: rule.thresholdUnit }) ?? cat([hit.reason ?? tx(''), figures]),
     },
     pairs,
   );
@@ -531,7 +534,7 @@ function notImplemented(rule: RuleConfig): MeasurementDraft {
   return {
     rule,
     analysisResultId: null,
-    judgment: { status: 'NOT_EVALUABLE', result: NOT_EVALUABLE, reason: tx(`No evaluator exists for rule ${rule.id}.`, `ルール ${rule.id} の評価処理がありません。`) },
+    judgment: { status: 'NOT_EVALUABLE', result: NOT_EVALUABLE, reason: cat([NOT_EVALUABLE_REASON, tx(`No evaluator exists for rule ${rule.id}.`, `ルール ${rule.id} の評価処理がありません。`)]) },
     evidence: { items: [], tables: [] },
     importedDataIds: [],
     subjectType: 'site',
@@ -619,14 +622,13 @@ function syntheticIssues(s: DailySeries, periods: Periods, included: boolean): I
   ];
 }
 
-/** In test mode a judgment that used synthetic values says so in its result and reason. */
+/** In test mode a judgment that used synthetic values is labelled in its result; the reason stays the business explanation (the TEST DATA notice is shown separately). */
 function testData(j: Judgment, pairs: (Pair | undefined)[]): Judgment {
   const used = pairs.some((p) => p && [...p.prev.syntheticDates, ...p.cur.syntheticDates].some((d) => [...p.prev.refs, ...p.cur.refs].some((r) => r.date === d)));
   if (!used) return j;
   return {
     ...j,
     result: cat([tx('[TEST DATA]', '［テストデータ］'), j.result]),
-    reason: cat([tx('Based on data the export marks as not real — not a business result.', 'エクスポートで実データではないとされたデータに基づく結果です — 業務上の結果ではありません。'), j.reason]),
   };
 }
 

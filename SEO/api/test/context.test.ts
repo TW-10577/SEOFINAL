@@ -82,3 +82,30 @@ describe('active import context', () => {
     assert.ok(data.rows.length > 0 && data.rows.every((r: any) => r.uploadId === july));
   });
 });
+
+describe('runs without data', () => {
+  test('no GA4 upload: Run measurements is refused and no run with empty dates is made', async () => {
+    const db = (await freshDb());
+    const app = createApp(db, config(), ontology());
+    const res = await app.request('/api/measurements/run', { method: 'POST', body: '{}', headers: { 'content-type': 'application/json' } });
+    assert.equal(res.status, 409);
+    assert.match(((await res.json()) as any).error, /No GA4 data has been uploaded/);
+    assert.equal(await db.value('SELECT COUNT(*) FROM measurement_runs'), 0);
+  });
+
+  test('deleting the last upload also removes runs left without data', async () => {
+    const { db, cfg, july, september } = (await twoFiles());
+    const app = createApp(db, cfg, ontology());
+    const post = (body: object) => app.request('/api/measurements/run', { method: 'POST', body: JSON.stringify(body), headers: { 'content-type': 'application/json' } });
+    assert.equal((await post({})).status, 201);
+    // A run of a week the data does not cover: every rule NOT_EVALUABLE, no value used.
+    assert.equal((await post({ currentEnd: '2026-12-31' })).status, 201);
+    assert.equal(await db.value('SELECT COUNT(*) FROM measurement_runs'), 2);
+    assert.equal((await app.request(`/api/uploads/${july}`, { method: 'DELETE' })).status, 200);
+    assert.equal(await db.value('SELECT COUNT(*) FROM measurement_runs'), 2, 'September data is left: its runs stay');
+    const last = (await (await app.request(`/api/uploads/${september}`, { method: 'DELETE' })).json()) as any;
+    assert.equal(last.rerunId, null);
+    assert.equal(await db.value('SELECT COUNT(*) FROM measurement_runs'), 0, 'no run with dates but no data is left');
+    assert.equal(((await (await app.request('/api/measurement-runs')).json()) as unknown[]).length, 0);
+  });
+});
